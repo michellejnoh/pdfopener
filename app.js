@@ -387,6 +387,19 @@
     return out;
   }
 
+  // A line was wrapped by the page only if it reaches the right edge of the text block, i.e. the first word of
+  // the next line would not have fitted on it. Anything that stops earlier was a deliberate line break.
+  const CJK = /^[\u3040-\u30FF\u4E00-\u9FFF]/;
+  function wrapped(a, b, right) {
+    if (!a || !b) return false;
+    if (a.text.includes("\u2003") || b.text.includes("\u2003")) return false; // table-like columns
+    const cw = Math.max(0.5, (b.x1 - b.x0) / Math.max(1, b.text.length)); // average character width
+    const word = CJK.test(b.text) ? b.text[0] : (b.text.match(/^\S+/) || [""])[0];
+    return a.x1 + cw * (word.length + 1) >= right - cw * 0.6;
+  }
+  const endsSentence = (t) => /[.!?:;。]["”’)\]]?$/.test(t);
+  const EXAMPLE_START = /^(e\.g\.|eg\b|ex\.|ex:|example\b)/i;
+
   function blocksFromPdfLines(pages, images) {
     // 1. remove running headers / footers & page numbers
     const norm = (t) => t.toLowerCase().replace(/\d+/g, "#").replace(/\s+/g, " ").trim();
@@ -428,7 +441,9 @@
       }
       const lineGap = median(gaps) || body * 1.3;
       const left = median(bodyLines.map((l) => l.x0)) || (lines.length ? Math.min(...lines.map((l) => l.x0)) : 0);
-      const right = lines.length ? Math.max(...(bodyLines.length ? bodyLines : lines).map((l) => l.x1)) : 0;
+      // right edge of the text block: the line ends of the longest body lines (ignoring a few odd wide ones)
+      const ends = (bodyLines.length ? bodyLines : lines).map((l) => l.x1).sort((a, b) => b - a);
+      const right = ends.length ? ends[ends.length >= 8 ? Math.floor(ends.length * 0.1) : 0] : 0;
       const fullWidth = right - left;
 
       let cur = null;
@@ -445,16 +460,18 @@
           const sizeChange = Math.abs(l.size - cur.size) > body * 0.12;
           const bigGap = gap > lineGap * 1.45 || gap < 0;
           const indented = l.x0 > left + body * 0.9 && l.x0 - left < fullWidth * 0.3 && !big;
-          const prevShort = prev.x1 < left + fullWidth * 0.82 && /[.!?:"”’)]$/.test(prev.text);
           const bullet = BULLET.test(l.text);
-          const example = /^(e\.g\.|eg\b|ex\.|ex:|example\b)/i.test(l.text);
-          newPara = sizeChange || bigGap || indented || prevShort || bullet || example;
+          const example = EXAMPLE_START.test(l.text);
+          const wr = wrapped(prev, l, right);
+          // keep lines together only when the page wrapped them; an indented line after a finished sentence is a new paragraph
+          newPara = sizeChange || bigGap || bullet || example || !wr || (indented && endsSentence(prev.text));
         }
         if (newPara) {
-          cur = { lines: [l.segs], size: l.size, page: pi };
+          cur = { lines: [l.segs], size: l.size, page: pi, first: l, last: l, right, lineGap };
           paras.push(cur);
         } else {
           cur.lines.push(l.segs);
+          cur.last = l;
         }
       });
       while (ii < imgs.length) paras.push({ img: imgs[ii++], page: pi });
@@ -467,16 +484,20 @@
       const segs = joinSegLines(p.lines);
       const text = segsText(segs);
       const last = merged[merged.length - 1];
+      // a sentence carried over to the next page: the last line of the page ran to the edge and the sentence isn't finished
       if (
         last && !last.img && last.page !== p.page &&
         Math.abs(last.size - body) < body * 0.12 && Math.abs(p.size - body) < body * 0.12 &&
-        !/[.!?:"”’)]$/.test(last.text) && !BULLET.test(text)
+        !endsSentence(last.text) && !BULLET.test(text) && !EXAMPLE_START.test(text) &&
+        wrapped(last.lastLine, p.first, last.right)
       ) {
         last.segs = joinSegLines([last.segs, segs]);
         last.text = segsText(last.segs);
         last.page = p.page;
+        last.lastLine = p.last;
+        last.right = p.right;
       } else {
-        merged.push({ segs, text, size: p.size, page: p.page });
+        merged.push({ segs, text, size: p.size, page: p.page, lastLine: p.last, right: p.right });
       }
     }
 
@@ -501,14 +522,6 @@
         const prev = blocks[blocks.length - 1];
         if (prev && prev.t === type) prev.items.push(item);
         else blocks.push(Object.assign({ t: type, items: [item] }, ordered && /^\(?\d+/.test(m[1]) ? { start: parseInt(m[1].replace("(", ""), 10) } : {}));
-        continue;
-      }
-      // a line that only continues the previous paragraph / list item (broken by a line change)
-      const prevB = blocks[blocks.length - 1];
-      const cont = window.PDFTidy && PDFTidy.canContinue;
-      if (cont && prevB && prevB.t === "p" && cont(stripTags(prevB.html), text)) { prevB.html += " " + segsHtml(p.segs); continue; }
-      if (cont && prevB && (prevB.t === "ul" || prevB.t === "ol") && cont(stripTags(prevB.items[prevB.items.length - 1]), text)) {
-        prevB.items[prevB.items.length - 1] += " " + segsHtml(p.segs);
         continue;
       }
       blocks.push({ t: "p", html: segsHtml(p.segs) });

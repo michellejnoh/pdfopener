@@ -298,14 +298,6 @@
         entries.push(cur);
         continue;
       }
-      if (cur && cur.defH) {
-        const lastH = cur.ex.length ? cur.ex[cur.ex.length - 1] : cur.defH;
-        const lt = stripTags(lastH);
-        if (!/[.!?:;]$/.test(lt) && (/[,\-–—\/(&+]$/.test(lt) || NO_END.test(lt))) {
-          if (cur.ex.length) cur.ex[cur.ex.length - 1] += " " + ln.html; else cur.defH += " " + ln.html;
-          continue;
-        }
-      }
       if (looksLikeTerm(text)) {
         const nm = /^(\d{1,3})[.)]?\s+/.exec(ln.html);
         cur = { i: ln.i, num: nm ? nm[1] : ln.num || "", termH: nm ? ln.html.slice(nm[0].length) : ln.html, pos: "", defH: "", ex: [] };
@@ -380,8 +372,7 @@
       const out = vocabForce(copy);
       return out.flatMap((b) => (b.t === "p" ? layoutParagraph(b) : [b]));
     }
-    const strong = true;
-    // 1. rejoin text that was broken in the middle of a sentence (into the paragraph or list item before it)
+    // 1. (line breaks are decided from the page layout when the PDF is read; nothing is joined here by guessing)
     const blocks = [];
     for (const [i, b0] of src.entries()) {
       const b = Object.assign({}, b0, { i });
@@ -391,16 +382,6 @@
       if (b.t === "p" && last && last.items && EXAMPLE.test(stripTags(b.html)) && parseEntry(last.items[last.items.length - 1])) {
         last.ex[last.ex.length - 1].push(b.html);
         continue;
-      }
-      const lastText = last ? (last.t === "p" ? last.html : last.items ? last.items[last.items.length - 1] : "") : "";
-      const vocabBoundary = lastText && parseEntry(lastText) && (parseEntry(b.html) || EXAMPLE.test(stripTags(b.html)));
-      if (b.t === "p" && last && !vocabBoundary) {
-        const nt = stripTags(b.html);
-        if (last.t === "p" && canContinue(stripTags(last.html), nt, strong)) { last.html += " " + b.html; continue; }
-        if ((last.t === "ul" || last.t === "ol") && last.items.length && canContinue(stripTags(last.items[last.items.length - 1]), nt)) {
-          last.items[last.items.length - 1] += " " + b.html;
-          continue;
-        }
       }
       if ((b.t === "ul" || b.t === "ol") && last && last.t === b.t) { last.items.push(...b.items); last.ex.push(...b.ex); continue; }
       blocks.push(b);
