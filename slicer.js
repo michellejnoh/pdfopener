@@ -10,11 +10,11 @@
 (() => {
   "use strict";
 
-  const ANALYSIS_W = 1200;     // the page is analysed at this pixel width
+  const ANALYSIS_W = 1000;     // the page is analysed at this pixel width
   const OUT_CSS_W = 330;       // width of a reflowed piece on the phone (CSS px)
-  const PX_PER_CSS = 3;        // pixels per CSS px (sharp on 3x iPhone screens)
+  const PX_PER_CSS = 2.5;      // pixels per CSS px (sharp on iPhone screens, much lighter than 3x)
   const TARGET_INK_CSS = 15;   // height of a text line's ink on the phone ≈ 16–17px font
-  const MAX_SIDE = 4096, MAX_PIXELS = 12e6; // stay inside iPhone canvas limits
+  const MAX_SIDE = 4096, MAX_PIXELS = 9e6; // stay inside iPhone canvas limits
   const MAX_LINES_PER_PIECE = 12;
 
   // ---------- ink map ----------
@@ -161,32 +161,50 @@
     await page.render({ canvasContext: ctx, viewport: vp }).promise;
     return c;
   }
+  // JPEG: fast to make on every browser (iPhone Safari can't make WebP and would silently build a big PNG first)
   function encode(canvas) {
-    let url = canvas.toDataURL("image/webp", 0.85);
-    if (!url.startsWith("data:image/webp")) url = canvas.toDataURL("image/jpeg", 0.88);
-    return url;
+    return canvas.toDataURL("image/jpeg", 0.72);
   }
 
   async function slicePage(page) {
     const base = page.getViewport({ scale: 1 });
     const aScale = ANALYSIS_W / base.width;
-    const a = await renderPage(page, aScale);
-    const W = a.width, H = a.height;
-    const { regions, ink } = analyse(inkTable(a.getContext("2d").getImageData(0, 0, W, H), W, H), W, H);
-    a.width = a.height = 0;
-    if (!regions.length) return [];
+    const maxScale = Math.min(MAX_SIDE / Math.max(base.width, base.height), Math.sqrt(MAX_PIXELS / (base.width * base.height)));
 
-    // typical text line height on this page decides the zoom
+    // the PDF's own font sizes tell us how sharp the page needs to be, so it is drawn only once
+    let fontPt = 0;
+    try {
+      const tc = await page.getTextContent();
+      const sizes = [];
+      for (const it of tc.items) {
+        if (!it.str || !it.str.trim()) continue;
+        const sz = Math.hypot(it.transform[2], it.transform[3]) || it.height;
+        for (let i = 0; i < Math.min(it.str.length, 40); i++) sizes.push(sz);
+      }
+      fontPt = median(sizes);
+    } catch {}
+    let hiScale = fontPt > 2 ? (TARGET_INK_CSS * PX_PER_CSS) / (fontPt * 0.97) : 3;
+    hiScale = Math.max(aScale, Math.min(hiScale, maxScale));
+    const hi = await renderPage(page, hiScale);
+
+    // a smaller copy of the drawn page is used to find columns, lines and words
+    const a = document.createElement("canvas");
+    a.width = Math.round(base.width * aScale);
+    a.height = Math.round(base.height * aScale);
+    const actx = a.getContext("2d", { willReadFrequently: true });
+    actx.imageSmoothingQuality = "medium";
+    actx.drawImage(hi, 0, 0, a.width, a.height);
+    const W = a.width, H = a.height;
+    const { regions, ink } = analyse(inkTable(actx.getImageData(0, 0, W, H), W, H), W, H);
+    a.width = a.height = 0;
+    if (!regions.length) { hi.width = hi.height = 0; return []; }
+
     const allLines = regions.flatMap((g) => g.lines);
     const textH = median(allLines.filter((l) => l.h >= 4).map((l) => l.h)) || 12;
     const kIdeal = (TARGET_INK_CSS * PX_PER_CSS) / textH;
-    let hiScale = aScale * kIdeal;
-    hiScale = Math.min(hiScale, MAX_SIDE / Math.max(base.width, base.height), Math.sqrt(MAX_PIXELS / (base.width * base.height)));
-    hiScale = Math.max(hiScale, aScale);
     const k = hiScale / aScale;
     const pxPerCss = PX_PER_CSS * (k / kIdeal);
     const outW = Math.round(OUT_CSS_W * pxPerCss);
-    const hi = await renderPage(page, hiScale);
 
     const wordGap = Math.max(2, textH * 0.2);
     const cellGap = Math.max(textH * 2.2, W * 0.03);
@@ -335,21 +353,28 @@
     return pieces;
   }
 
-  async function slicePdf(buf, onProgress) {
+  // onStart({ metaTitle, pages }) is called first, then onPage(blocks, n, total) after every page is ready,
+  // so the reader can open while later pages are still being prepared
+  async function slicePdf(buf, onProgress, onPage, onStart) {
     const pdf = await pdfjsLib.getDocument({ data: buf, cMapUrl: "vendor/cmaps/", cMapPacked: true }).promise;
     let metaTitle = "";
     try {
       const meta = await pdf.getMetadata();
       metaTitle = (meta && meta.info && meta.info.Title) || "";
     } catch {}
+    if (onStart) onStart({ metaTitle, pages: pdf.numPages });
     const blocks = [];
     for (let n = 1; n <= pdf.numPages; n++) {
       const page = await pdf.getPage(n);
-      blocks.push({ t: "pagemark", n });
-      for (const p of await slicePage(page)) blocks.push({ t: "slice", src: p.src, w: p.w, h: p.h, page: n });
+      const pageBlocks = [{ t: "pagemark", n }];
+      for (const p of await slicePage(page)) pageBlocks.push({ t: "slice", src: p.src, w: p.w, h: p.h, page: n });
       page.cleanup();
-      onProgress(n / pdf.numPages, n, pdf.numPages);
+      blocks.push(...pageBlocks);
+      if (onProgress) onProgress(n / pdf.numPages, n, pdf.numPages);
+      if (onPage) onPage(pageBlocks, n, pdf.numPages);
+      await new Promise((r) => setTimeout(r, 0)); // let the screen update between pages
     }
+    pdf.destroy();
     return { blocks, metaTitle, pages: pdf.numPages };
   }
 

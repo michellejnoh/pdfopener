@@ -776,3 +776,5 @@ button { font: inherit; color: inherit; cursor: pointer; }
   break-after: avoid;
 }
 .pages .pagemark::before, .pages .pagemark::after { content: ""; flex: 1; border-top: 2px dotted var(--lcd-line); }
+
+.pages .the-end.loading { animation: blink 1.2s steps(2, jump-none) infinite; }

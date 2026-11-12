@@ -748,10 +748,7 @@
     chapterLevel = 1;
     vocabWords = 0;
     let body = "";
-    book.blocks.forEach((b, i) => {
-      if (b.t === "pagemark") body += `<div class="pagemark" data-i="${i}">page ${b.n}</div>`;
-      else if (b.t === "slice") body += `<figure class="pic slice" data-i="${i}"><img src="${b.src}" alt="" data-w="${b.w}" data-h="${b.h}" decoding="async"></figure>`;
-    });
+    book.blocks.forEach((b, i) => { body += sliceHtml(b, i); });
     const pages = book.pages || book.blocks.filter((b) => b.t === "pagemark").length;
     el.classList.remove("hide-defs");
     el.innerHTML = `
@@ -764,6 +761,26 @@
       </div>${body}<div class="the-end">— end of message —<br>♡</div>`;
     $("toc").innerHTML = book.blocks.map((b, i) => (b.t === "pagemark" ? `<li data-i="${i}"><button type="button" data-i="${i}">Page ${b.n}</button></li>` : "")).join("");
     $("tocLabel").textContent = "Pages";
+    updateLoadingNote();
+  }
+  const sliceHtml = (b, i) =>
+    b.t === "pagemark" ? `<div class="pagemark" data-i="${i}">page ${b.n}</div>`
+    : b.t === "slice" ? `<figure class="pic slice" data-i="${i}"><img src="${b.src}" alt="" data-w="${b.w}" data-h="${b.h}" decoding="async"></figure>` : "";
+  // add newly prepared pages to the open book without losing your place
+  function appendSlices(newBlocks, start) {
+    const el = $("pages");
+    const end = el.querySelector(".the-end");
+    if (!end) return;
+    const cur = firstBlockOnPage();
+    end.insertAdjacentHTML("beforebegin", newBlocks.map((b, j) => sliceHtml(b, start + j)).join(""));
+    $("toc").insertAdjacentHTML("beforeend", newBlocks.map((b, j) => (b.t === "pagemark" ? `<li data-i="${start + j}"><button type="button" data-i="${start + j}">Page ${b.n}</button></li>` : "")).join(""));
+    layout(cur);
+  }
+  function updateLoadingNote() {
+    const end = $("pages").querySelector(".the-end");
+    if (!end || !book) return;
+    end.innerHTML = book.loading ? `preparing pages… ${book.loaded}/${book.pages}` : "— end of message —<br>♡";
+    end.classList.toggle("loading", !!book.loading);
   }
 
   function renderBook() {
@@ -999,8 +1016,57 @@
   });
   $("typeCancel").addEventListener("click", () => { pendingFile = null; closeTypeSheet(); });
 
+  const pickTitle = (meta, name) => {
+    const base = name.replace(/\.(pdf|docx)$/i, "").replace(/[_]+/g, " ").trim();
+    meta = (meta || "").trim();
+    return meta && meta.length < 120 && !/^(untitled|microsoft word|document\d*|\(?anonymous\)?)\b/i.test(meta) && !/\.(docx?|pdf)$/i.test(meta) ? meta : base;
+  };
+
+  // PDFs: the reader opens as soon as the first pages are ready; later pages are added while you read
+  let busy = false;
+  async function processPdf(buf, name) {
+    busy = true;
+    const b = { id: Date.now().toString(36), title: pickTitle("", name), file: name, kind: "pdf", type: "pdf", mode: "slices", pages: 0, loaded: 0, loading: true, added: Date.now(), blocks: [], pos: -1, pct: 0 };
+    let opened = false;
+    try {
+      setSending(true, 0.06, "Opening PDF…");
+      await PDFSlicer.slicePdf(
+        buf,
+        (p, n, total) => setSending(true, 0.06 + p * 0.92, `Cutting page ${n} of ${total}…`),
+        (pageBlocks, n, total) => {
+          const start = b.blocks.length;
+          b.blocks.push(...pageBlocks);
+          b.loaded = n;
+          if (!opened && (n >= 2 || n === total)) { opened = true; openBook(b); }
+          else if (opened && book === b) appendSlices(pageBlocks, start);
+          if (book === b) updateLoadingNote();
+        },
+        ({ metaTitle, pages }) => { b.pages = pages; b.title = pickTitle(metaTitle, name); }
+      );
+      b.loading = false;
+      if (book === b) updateLoadingNote();
+      if (!b.blocks.some((x) => x.t === "slice")) {
+        if (book === b) closeBook();
+        setSending(false);
+        return showError("This PDF looks empty.");
+      }
+      const saved = await saveToLibrary(b);
+      setTimeout(() => setSending(false), 300);
+      if (!saved) toast("couldn't save this one, but you can read it now");
+      if (!book) renderLibrary();
+    } catch (err) {
+      console.error(err);
+      setSending(false);
+      if (book === b) closeBook();
+      showError(/password/i.test(err && err.message) ? "This PDF is password-protected, so I can't open it." : "Sorry, I couldn't read that file. It might be damaged or in an unusual format.");
+    } finally {
+      busy = false;
+    }
+  }
+
   // step 2: read it
   async function processFile(file, type) {
+    if (busy) return toast("still preparing the last file — one moment");
     const name = file.name || "file";
     const ext = name.split(".").pop().toLowerCase();
 
@@ -1009,9 +1075,7 @@
       const buf = await file.arrayBuffer();
       let res;
       if (ext === "pdf" && window.PDFSlicer) {
-        setSending(true, 0.06, "Opening PDF…");
-        res = await PDFSlicer.slicePdf(buf, (p, n, total) => setSending(true, 0.06 + p * 0.92, `Cutting page ${n} of ${total}…`));
-        res.mode = "slices";
+        return await processPdf(buf, name);
       } else if (ext === "pdf") {
         setSending(true, 0.08, "Reading pages…");
         res = await readPdf(buf, (p) => setSending(true, 0.08 + p * 0.9, p < 0.6 ? `Reading pages… ${Math.round((p / 0.6) * 100)}%` : "Saving pictures…"));
@@ -1229,5 +1293,5 @@
   renderLibrary();
 
   // test hook
-  window.__pdfopener = { linesFromItems, scanOps, blocksFromPdfLines, get state() { return { page, pageCount, book }; } };
+  window.__pdfopener = { linesFromItems, scanOps, blocksFromPdfLines, get busy() { return busy; }, get state() { return { page, pageCount, book }; } };
 })();
