@@ -122,6 +122,20 @@
             </span>
           </div>
           <div class="sheet-row">
+            <span>Layout</span>
+            <span class="seg" id="layoutSeg">
+              <button type="button" data-easy="1">Easy</button>
+              <button type="button" data-easy="0">Original</button>
+            </span>
+          </div>
+          <div class="sheet-row">
+            <span>Typos</span>
+            <span class="seg" id="fixSeg">
+              <button type="button" data-fix="1">Fix</button>
+              <button type="button" data-fix="0">Keep</button>
+            </span>
+          </div>
+          <div class="sheet-row">
             <span>Screen</span>
             <span class="seg" id="themeSeg">
               <button type="button" data-theme="pink">Pink</button>
@@ -140,6 +154,8 @@
         <div class="sheet-title">About</div>
         <p class="about-text">PDFopener turns PDF and Word (.docx) files into e-books that fit your phone. It pulls out the words, pictures and text colours, finds the chapter headings, and lays everything out in pages you can flip.</p>
         <p class="about-text"><b>Flip pages:</b> tap the left or right side, swipe, or use the arrow keys.</p>
+        <p class="about-text"><b>Easy layout:</b> long paragraphs are split into short chunks, lists hidden inside sentences become real lists, and notes, tips and definitions get their own boxes. No words are added or changed. Switch to <i>Original</i> in the menu anytime.</p>
+        <p class="about-text"><b>Typos:</b> small mistakes (common misspellings, a word typed twice, odd spacing) are fixed and get a faint dotted underline. Hold or hover on one to see what it was.</p>
         <p class="about-text"><b>Pictures:</b> tap a picture to see it bigger.</p>
         <p class="about-text"><b>Good to know:</b> scanned PDFs (photos of pages) come through as pictures only, since there's no real text inside. Complex layouts like multi-column magazines may read in a slightly different order.</p>
         <button type="button" class="sheet-back" id="closeAbout">OK</button>
@@ -158,6 +174,7 @@
   <script src="vendor/pdf.min.js"></script>
   <script src="vendor/mammoth.browser.min.js"></script>
   <script src="vendor/jszip.min.js"></script>
+  <script src="tidy.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

@@ -625,3 +625,21 @@ button { font: inherit; color: inherit; cursor: pointer; }
   font-family: var(--pixel); font-size: 10px; color: #f2e6e7; opacity: .8;
 }
 
+
+/* easy layout */
+.pages .callout {
+  break-inside: avoid;
+  -webkit-column-break-inside: avoid;
+  margin: 0 0 .9em;
+  padding: .55em .8em;
+  background: var(--lcd-soft);
+  border: 2px solid var(--lcd-line);
+  border-left: 5px solid var(--pink-500);
+  border-radius: 8px;
+}
+.pages .callout .lbl { color: var(--lcd-accent); }
+.pages p.def { padding-left: .8em; border-left: 3px solid var(--pink-300); }
+.pages p.def .term { color: var(--lcd-accent); }
+.pages p.q { color: var(--lcd-accent); font-weight: 700; margin-bottom: .45em; break-after: avoid; }
+.pages h3.pseudo { font-size: 1.02em; margin: 1em 0 .45em; }
+.pages .fx { text-decoration: underline dotted var(--pink-500); text-decoration-thickness: 1.5px; text-underline-offset: 3px; }

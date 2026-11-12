@@ -83,7 +83,7 @@
   })();
 
   // ---------- settings ----------
-  const settings = Object.assign({ fs: 18, font: "helv", theme: "pink" }, store.get(SET_KEY, {}));
+  const settings = Object.assign({ fs: 18, font: "helv", theme: "pink", easy: true, fixes: true }, store.get(SET_KEY, {}));
   if (!["helv", "serif", "pixel"].includes(settings.font)) settings.font = "helv";
   function applySettings() {
     document.documentElement.style.setProperty("--fs", settings.fs + "px");
@@ -91,6 +91,8 @@
     document.documentElement.dataset.theme = settings.theme;
     document.querySelectorAll("#fontSeg button").forEach((b) => b.classList.toggle("on", b.dataset.font === settings.font));
     document.querySelectorAll("#themeSeg button").forEach((b) => b.classList.toggle("on", b.dataset.theme === settings.theme));
+    document.querySelectorAll("#layoutSeg button").forEach((b) => b.classList.toggle("on", (b.dataset.easy === "1") === settings.easy));
+    document.querySelectorAll("#fixSeg button").forEach((b) => b.classList.toggle("on", (b.dataset.fix === "1") === settings.fixes));
     store.set(SET_KEY, settings);
   }
   applySettings();
@@ -728,37 +730,44 @@
     const first = book.blocks.findIndex((b) => b.t !== "hr");
     const skip = first >= 0 && book.blocks[first].t === "h" && simp(stripTags(book.blocks[first].html)) === simp(book.title) ? first : -1;
 
-    const meta = [words ? `${words.toLocaleString()} words · ~${mins} min read` : "", pics ? `${pics} picture${pics > 1 ? "s" : ""}` : ""].filter(Boolean).join("<br>");
-    let html = `
+    // easy layout (splits / groups / styles text without rewording it) and small-mistake fixes
+    const disp = settings.easy && window.PDFTidy ? PDFTidy.layout(book.blocks) : book.blocks.map((b, i) => Object.assign({}, b, { i }));
+    const counter = { n: 0 };
+    const fx = (h) => (settings.fixes && window.PDFTidy ? PDFTidy.fixHtml(h, counter, true) : h);
+
+    let body = "";
+    disp.forEach((b) => {
+      const di = ` data-i="${b.i}"`;
+      if (b.i === skip && b.t === "h" && !b.pseudo) return;
+      if (b.t === "h") {
+        const cls = b.pseudo ? ' class="pseudo"' : b.lvl === 2 && chapterLevel === 2 ? ' class="chapter"' : "";
+        body += `<h${b.lvl}${di}${cls}>${fx(b.html)}</h${b.lvl}>`;
+      } else if (b.t === "p") body += `<p${di}${b.cls ? ` class="${b.cls}"` : ""}>${fx(b.html)}</p>`;
+      else if (b.t === "ul" || b.t === "ol") body += `<${b.t}${di}>${b.items.map((x) => `<li>${fx(x)}</li>`).join("")}</${b.t}>`;
+      else if (b.t === "quote") body += `<blockquote${di}>${fx(b.html)}</blockquote>`;
+      else if (b.t === "callout") body += `<div class="callout"${di}>${fx(b.html)}</div>`;
+      else if (b.t === "def") body += `<p class="def"${di}>${fx(b.html)}</p>`;
+      else if (b.t === "table") body += `<div class="tbl-wrap"${di}>${fx(b.html)}</div>`;
+      else if (b.t === "img") body += `<figure class="pic"${di}><img src="${b.src}" alt="${esc(b.alt || "")}" data-w="${b.w || 600}" data-h="${b.h || 400}" decoding="async"></figure>`;
+      else if (b.t === "hr") body += `<hr${di}>`;
+    });
+
+    const tidyNote = [settings.easy ? "easy layout" : "", settings.fixes && counter.n ? `${counter.n} small fix${counter.n > 1 ? "es" : ""}` : ""].filter(Boolean).join(" · ");
+    const meta = [words ? `${words.toLocaleString()} words · ~${mins} min read` : "", pics ? `${pics} picture${pics > 1 ? "s" : ""}` : "", tidyNote].filter(Boolean).join("<br>");
+    el.innerHTML = `
       <div class="cover">
         <span class="cover-badge">1 NEW MESSAGE</span>
         <img class="cover-icon" src="favicon.svg" alt="">
         <h2 class="cover-title">${esc(book.title)}</h2>
         <div class="cover-meta">from: ${esc(book.file)}<br>${meta}</div>
         <div class="cover-hint">tap the right side or swipe to start ▶</div>
-      </div>`;
-
-    book.blocks.forEach((b, i) => {
-      const di = ` data-i="${i}"`;
-      if (i === skip) return;
-      if (b.t === "h") {
-        const cls = b.lvl === 2 && chapterLevel === 2 ? ' class="chapter"' : "";
-        html += `<h${b.lvl}${di}${cls}>${b.html}</h${b.lvl}>`;
-      } else if (b.t === "p") html += `<p${di}>${b.html}</p>`;
-      else if (b.t === "ul" || b.t === "ol") html += `<${b.t}${di}>${b.items.map((x) => `<li>${x}</li>`).join("")}</${b.t}>`;
-      else if (b.t === "quote") html += `<blockquote${di}>${b.html}</blockquote>`;
-      else if (b.t === "table") html += `<div class="tbl-wrap"${di}>${b.html}</div>`;
-      else if (b.t === "img") html += `<figure class="pic"${di}><img src="${b.src}" alt="${esc(b.alt || "")}" data-w="${b.w || 600}" data-h="${b.h || 400}" decoding="async"></figure>`;
-      else if (b.t === "hr") html += `<hr${di}>`;
-    });
-    html += `<div class="the-end">— end of message —<br>♡</div>`;
-    el.innerHTML = html;
+      </div>${body}<div class="the-end">— end of message —<br>♡</div>`;
 
     // table of contents
     const toc = $("toc");
     const heads = book.blocks.map((b, i) => ({ b, i })).filter(({ b, i }) => b.t === "h" && b.lvl <= chapterLevel + 1 && i !== skip);
     toc.innerHTML = heads.length
-      ? heads.map(({ b, i }) => `<li class="${b.lvl > chapterLevel ? "sub" : ""}" data-i="${i}"><button type="button" data-i="${i}">${esc(stripTags(b.html))}</button></li>`).join("")
+      ? heads.map(({ b, i }) => `<li class="${b.lvl > chapterLevel ? "sub" : ""}" data-i="${i}"><button type="button" data-i="${i}">${settings.fixes && window.PDFTidy ? PDFTidy.fixHtml(esc(stripTags(b.html)), { n: 0 }, false) : esc(stripTags(b.html))}</button></li>`).join("")
       : `<li class="toc-empty">no chapters found in this file</li>`;
   }
 
@@ -1039,6 +1048,14 @@
   $("fontSeg").addEventListener("click", (e) => {
     const b = e.target.closest("button[data-font]");
     if (b) { settings.font = b.dataset.font; applySettings(); relayoutKeepingPlace(); }
+  });
+  $("layoutSeg").addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-easy]");
+    if (b && book) { const cur = firstBlockOnPage(); settings.easy = b.dataset.easy === "1"; applySettings(); renderBook(); requestAnimationFrame(() => layout(cur)); }
+  });
+  $("fixSeg").addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-fix]");
+    if (b && book) { const cur = firstBlockOnPage(); settings.fixes = b.dataset.fix === "1"; applySettings(); renderBook(); requestAnimationFrame(() => layout(cur)); }
   });
   $("themeSeg").addEventListener("click", (e) => {
     const b = e.target.closest("button[data-theme]");
