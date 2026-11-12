@@ -763,3 +763,16 @@ button { font: inherit; color: inherit; cursor: pointer; }
   margin-right: 6px;
   vertical-align: 1px;
 }
+
+/* sliced PDFs */
+.pages figure.slice { margin: 0 0 .35em; }
+/* the white of the page melts into the screen, so pieces read like text, not boxes */
+.pages figure.slice img { border: 0; border-radius: 0; background: transparent; mix-blend-mode: multiply; cursor: zoom-in; }
+[data-theme="night"] .pages figure.slice img { filter: invert(1) hue-rotate(180deg); mix-blend-mode: screen; }
+.pages .pagemark {
+  display: flex; align-items: center; gap: .6em;
+  margin: .5em 0 .5em;
+  font-family: var(--pixel); font-size: 10px; color: var(--muted);
+  break-after: avoid;
+}
+.pages .pagemark::before, .pages .pagemark::after { content: ""; flex: 1; border-top: 2px dotted var(--lcd-line); }

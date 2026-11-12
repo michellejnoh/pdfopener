@@ -5,21 +5,17 @@ Turn a **PDF** or **Word (.docx)** file into a cute, mobile-friendly e-book, sty
 **Live site:** https://michellejnoh.github.io/pdfopener/
 
 ## What it does
-- Pulls the text out of your file and finds chapters and section headings
-- Keeps the pictures and the original text colours
-- **Easy layout:** splits long paragraphs into short chunks, turns lists hidden inside sentences into real lists, and puts notes, tips and definitions in their own boxes — without adding or changing any words (switch to *Original* in the menu anytime)
-- Fixes small mistakes (common misspellings, a word typed twice, odd spacing); fixed words get a faint dotted underline showing the original
-- Removes page numbers and running headers/footers from PDFs
-- Lays the book out in pages you can flip (tap the sides, swipe, or use the arrow keys)
-- Contents menu, text size, three fonts (Arial / Serif / Pixel) and a Night screen
-- Remembers your books and where you stopped reading (saved in your browser)
+**PDFs** keep their real look (fonts, colours, pictures) but are reflowed for a phone:
+- page margins are trimmed and two-column pages are read one column at a time
+- each line is cut into its words (as images) and re-wrapped into narrower lines at a comfortable size
+- lines are only joined when the page itself wrapped them, so lists, short lines and bullet points keep their real breaks
+- pictures and anything unusual are kept whole; tap a piece to zoom in
+- Night mode inverts the pages for dark reading
 
-Everything runs in your browser. Files are never uploaded anywhere.
+**Word files** become a text e-book: choose *Reading material* or *Vocab list* when you upload
+(vocab lists become word cards you can quiz yourself with).
 
-## Limits
-- Scanned PDFs come through as pictures only.
-- Multi-column layouts may read in a slightly different order.
-- Old `.doc` files need to be re-saved as `.docx` first.
+Everything runs in your browser. Files are never uploaded anywhere. Books and your reading position are saved on your device.
 
 ## Built with
 Plain HTML, CSS and JavaScript · [PDF.js](https://mozilla.github.io/pdf.js/) · [mammoth.js](https://github.com/mwilliamson/mammoth.js) · fonts: Arial, Silkscreen, DotGothic16, Lora

@@ -743,7 +743,33 @@
   let chapterLevel = 1;
   let vocabWords = 0;
 
+  function renderSlices() {
+    const el = $("pages");
+    chapterLevel = 1;
+    vocabWords = 0;
+    let body = "";
+    book.blocks.forEach((b, i) => {
+      if (b.t === "pagemark") body += `<div class="pagemark" data-i="${i}">page ${b.n}</div>`;
+      else if (b.t === "slice") body += `<figure class="pic slice" data-i="${i}"><img src="${b.src}" alt="" data-w="${b.w}" data-h="${b.h}" decoding="async"></figure>`;
+    });
+    const pages = book.pages || book.blocks.filter((b) => b.t === "pagemark").length;
+    el.classList.remove("hide-defs");
+    el.innerHTML = `
+      <div class="cover">
+        <span class="cover-badge">1 NEW MESSAGE</span>
+        <img class="cover-icon" src="favicon.svg" alt="">
+        <h2 class="cover-title">${esc(book.title)}</h2>
+        <div class="cover-meta">from: ${esc(book.file)}<br>${pages} page${pages === 1 ? "" : "s"} · cut to fit your phone</div>
+        <div class="cover-hint">tap the right side or swipe to start ▶</div>
+      </div>${body}<div class="the-end">— end of message —<br>♡</div>`;
+    $("toc").innerHTML = book.blocks.map((b, i) => (b.t === "pagemark" ? `<li data-i="${i}"><button type="button" data-i="${i}">Page ${b.n}</button></li>` : "")).join("");
+    $("tocLabel").textContent = "Pages";
+  }
+
   function renderBook() {
+    document.querySelectorAll(".text-only").forEach((r) => (r.hidden = book.mode === "slices"));
+    if (book.mode === "slices") return renderSlices();
+    $("tocLabel").textContent = "Contents";
     const el = $("pages");
     const hasH1 = book.blocks.some((b) => b.t === "h" && b.lvl === 1);
     chapterLevel = hasH1 ? 1 : 2;
@@ -910,7 +936,7 @@
               ${envSvg}
               <span class="msg-main">
                 <span class="msg-title">${esc(b.title)}</span>
-                <span class="msg-sub">${b.type ? `<span class="msg-type">${b.type === "vocab" ? "vocab" : "reading"}</span>` : ""}${esc(b.file)} · ${new Date(b.added).toLocaleDateString()}</span>
+                <span class="msg-sub">${b.mode === "slices" ? `<span class="msg-type">pdf</span>` : b.type ? `<span class="msg-type">${b.type === "vocab" ? "vocab" : "reading"}</span>` : ""}${esc(b.file)} · ${new Date(b.added).toLocaleDateString()}</span>
               </span>
               <span class="msg-pct">${b.pct ? b.pct + "%" : "NEW"}</span>
             </button>
@@ -927,7 +953,7 @@
       return false;
     }
     const lib = store.get(LIB_KEY, []).filter((x) => x.id !== b.id);
-    lib.unshift({ id: b.id, title: b.title, file: b.file, kind: b.kind, type: b.type, added: b.added, pos: -1, pct: 0 });
+    lib.unshift({ id: b.id, title: b.title, file: b.file, kind: b.kind, type: b.type, mode: b.mode, pages: b.pages, added: b.added, pos: -1, pct: 0 });
     return store.set(LIB_KEY, lib);
   }
 
@@ -952,6 +978,7 @@
     const ext = name.split(".").pop().toLowerCase();
     if (ext === "doc") return showError("Old <b>.doc</b> files can't be opened here. In Word, use <i>File → Save As → .docx</i> and send that instead ♡");
     if (ext !== "pdf" && ext !== "docx") return showError("I can only open <b>.pdf</b> and <b>.docx</b> files.");
+    if (ext === "pdf") return processFile(file, "pdf");
     pendingFile = file;
     $("typeFile").textContent = name;
     $("dropzone").hidden = true;
@@ -981,7 +1008,11 @@
     try {
       const buf = await file.arrayBuffer();
       let res;
-      if (ext === "pdf") {
+      if (ext === "pdf" && window.PDFSlicer) {
+        setSending(true, 0.06, "Opening PDF…");
+        res = await PDFSlicer.slicePdf(buf, (p, n, total) => setSending(true, 0.06 + p * 0.92, `Cutting page ${n} of ${total}…`));
+        res.mode = "slices";
+      } else if (ext === "pdf") {
         setSending(true, 0.08, "Reading pages…");
         res = await readPdf(buf, (p) => setSending(true, 0.08 + p * 0.9, p < 0.6 ? `Reading pages… ${Math.round((p / 0.6) * 100)}%` : "Saving pictures…"));
       } else {
@@ -990,15 +1021,15 @@
       }
       setSending(true, 1, "Done ♡");
       const textLen = res.blocks.reduce((n, b) => n + stripTags(b.html || (b.items || []).join(" ")).length, 0);
-      const hasImg = res.blocks.some((b) => b.t === "img");
+      const hasImg = res.blocks.some((b) => b.t === "img" || b.t === "slice");
       if (textLen < 20 && !hasImg) {
         setSending(false);
-        return showError(ext === "pdf" ? "This PDF doesn't seem to have any text or pictures inside." : "This document looks empty.");
+        return showError(ext === "pdf" ? "This PDF looks empty." : "This document looks empty.");
       }
       const base = name.replace(/\.(pdf|docx)$/i, "").replace(/[_]+/g, " ").trim();
       const meta = (res.metaTitle || "").trim();
-      const title = meta && meta.length < 120 && !/^(untitled|microsoft word|document\d*)\b/i.test(meta) && !/\.(docx?|pdf)$/i.test(meta) ? meta : base;
-      const b = { id: Date.now().toString(36), title, file: name, kind: ext, type, added: Date.now(), blocks: res.blocks, pos: -1, pct: 0 };
+      const title = meta && meta.length < 120 && !/^(untitled|microsoft word|document\d*|\(?anonymous\)?)\b/i.test(meta) && !/^\(anonymous\)$/i.test(meta) && !/\.(docx?|pdf)$/i.test(meta) ? meta : base;
+      const b = { id: Date.now().toString(36), title, file: name, kind: ext, type, mode: res.mode || "text", pages: res.pages || 0, added: Date.now(), blocks: res.blocks, pos: -1, pct: 0 };
       const saved = await saveToLibrary(b);
       setTimeout(() => setSending(false), 300);
       openBook(b);

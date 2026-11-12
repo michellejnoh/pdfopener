@@ -12,8 +12,8 @@
   <link rel="alternate icon" href="favicon.ico">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="stylesheet" href="fonts/fonts.css?v=202611122041">
-  <link rel="stylesheet" href="style.css?v=202611122041">
+  <link rel="stylesheet" href="fonts/fonts.css?v=202611122103">
+  <link rel="stylesheet" href="style.css?v=202611122103">
 </head>
 <body>
   <div class="phone">
@@ -49,7 +49,7 @@
 
           <div class="bubble in">
             <div class="bubble-meta">From: PDFopener · now</div>
-            hi! send me a <em>PDF</em> or <em>Word</em> file and i'll turn it into a little e-book you can read on your phone. everything stays on your device ♡
+            hi! send me a <em>PDF</em> and i'll cut it into pieces that fit your phone, or a <em>Word</em> file and i'll turn it into a little e-book. everything stays on your device ♡
           </div>
 
           <label class="dropzone" id="dropzone" for="fileInput">
@@ -121,14 +121,14 @@
         <div class="sheet-backdrop" id="sheetBackdrop" hidden></div>
         <div class="sheet" id="sheet" hidden role="dialog" aria-label="Reader menu">
           <div class="sheet-title">Menu</div>
-          <div class="sheet-row">
+          <div class="sheet-row text-only">
             <span>Text size</span>
             <span class="seg">
               <button type="button" id="fontDown" aria-label="Smaller text">A−</button>
               <button type="button" id="fontUp" aria-label="Bigger text">A+</button>
             </span>
           </div>
-          <div class="sheet-row">
+          <div class="sheet-row text-only">
             <span>Font</span>
             <span class="seg" id="fontSeg">
               <button type="button" data-font="helv">Arial</button>
@@ -136,28 +136,28 @@
               <button type="button" data-font="pixel">Pixel</button>
             </span>
           </div>
-          <div class="sheet-row">
+          <div class="sheet-row text-only">
             <span>File type</span>
             <span class="seg" id="typeSeg">
               <button type="button" data-type="reading">Reading</button>
               <button type="button" data-type="vocab">Vocab</button>
             </span>
           </div>
-          <div class="sheet-row">
+          <div class="sheet-row text-only">
             <span>Layout</span>
             <span class="seg" id="layoutSeg">
               <button type="button" data-easy="1">Easy</button>
               <button type="button" data-easy="0">Original</button>
             </span>
           </div>
-          <div class="sheet-row">
+          <div class="sheet-row text-only">
             <span>Vocab meanings</span>
             <span class="seg" id="vocabSeg">
               <button type="button" data-hide="0">Show</button>
               <button type="button" data-hide="1">Hide</button>
             </span>
           </div>
-          <div class="sheet-row">
+          <div class="sheet-row text-only">
             <span>Typos</span>
             <span class="seg" id="fixSeg">
               <button type="button" data-fix="1">Fix</button>
@@ -181,13 +181,13 @@
       <div class="sheet-backdrop" id="aboutBackdrop" hidden></div>
       <div class="sheet" id="about" hidden role="dialog" aria-label="About">
         <div class="sheet-title">About</div>
-        <p class="about-text">PDFopener turns PDF and Word (.docx) files into e-books that fit your phone. It pulls out the words, pictures and text colours, finds the chapter headings, and lays everything out in pages you can flip.</p>
+        <p class="about-text"><b>PDFs</b> stay exactly as they look, but each page is cut into pieces that fit your phone: margins are trimmed so the text is bigger, two-column pages are split into their columns, and cuts are only made in the blank space between lines. Tap a piece to zoom in.</p>
+        <p class="about-text"><b>Word files</b> become a text e-book: pick <i>Reading material</i> or <i>Vocab list</i> when you upload.</p>
         <p class="about-text"><b>Flip pages:</b> tap the left or right side, swipe, or use the arrow keys.</p>
         <p class="about-text"><b>Easy layout:</b> long paragraphs are split into short chunks, lists hidden inside sentences become real lists, and notes, tips and definitions get their own boxes. No words are added or changed. Switch to <i>Original</i> in the menu anytime.</p>
         <p class="about-text"><b>Vocab sheets:</b> choose <i>Vocab list</i> when you upload (or change <i>File type</i> in the menu) and the words become word cards. Choose <i>Hide</i> next to "Vocab meanings" in the menu to test yourself, then tap a card to reveal it.</p>
         <p class="about-text"><b>Typos:</b> small mistakes (common misspellings, a word typed twice, odd spacing) are fixed and get a faint dotted underline. Hold or hover on one to see what it was.</p>
         <p class="about-text"><b>Pictures:</b> tap a picture to see it bigger.</p>
-        <p class="about-text"><b>Good to know:</b> scanned PDFs (photos of pages) come through as pictures only, since there's no real text inside. Complex layouts like multi-column magazines may read in a slightly different order.</p>
         <button type="button" class="sheet-back" id="closeAbout">OK</button>
       </div>
 
@@ -204,7 +204,8 @@
   <script src="vendor/pdf.min.js"></script>
   <script src="vendor/mammoth.browser.min.js"></script>
   <script src="vendor/jszip.min.js"></script>
-  <script src="tidy.js?v=202611122041"></script>
-  <script src="app.js?v=202611122041"></script>
+  <script src="slicer.js?v=202611122103"></script>
+  <script src="tidy.js?v=202611122103"></script>
+  <script src="app.js?v=202611122103"></script>
 </body>
 </html>
