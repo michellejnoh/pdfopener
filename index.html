@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
   <title>PDFopener ♡ pocket e-books from your files</title>
   <meta name="description" content="Upload a PDF or Word document and read it as a cute, mobile-friendly e-book.">
   <meta name="theme-color" content="#d4a5ad">
@@ -122,6 +122,13 @@
             </span>
           </div>
           <div class="sheet-row">
+            <span>File type</span>
+            <span class="seg" id="typeSeg">
+              <button type="button" data-type="reading">Reading</button>
+              <button type="button" data-type="vocab">Vocab</button>
+            </span>
+          </div>
+          <div class="sheet-row">
             <span>Layout</span>
             <span class="seg" id="layoutSeg">
               <button type="button" data-easy="1">Easy</button>
@@ -155,6 +162,22 @@
         </div>
       </section>
 
+      <!-- what kind of file? -->
+      <div class="sheet-backdrop" id="typeBackdrop" hidden></div>
+      <div class="sheet" id="typeSheet" hidden role="dialog" aria-label="What kind of file is this?">
+        <div class="sheet-title">What kind of file is this?</div>
+        <p class="type-file" id="typeFile"></p>
+        <button type="button" class="type-btn" data-type="reading">
+          <span class="type-name">Reading material</span>
+          <span class="type-desc">notes, articles, textbooks, handouts</span>
+        </button>
+        <button type="button" class="type-btn" data-type="vocab">
+          <span class="type-name">Vocab list</span>
+          <span class="type-desc">words with meanings, word tables, word tests</span>
+        </button>
+        <button type="button" class="type-cancel" id="typeCancel">Cancel</button>
+      </div>
+
       <!-- about overlay -->
       <div class="sheet-backdrop" id="aboutBackdrop" hidden></div>
       <div class="sheet" id="about" hidden role="dialog" aria-label="About">
@@ -162,7 +185,7 @@
         <p class="about-text">PDFopener turns PDF and Word (.docx) files into e-books that fit your phone. It pulls out the words, pictures and text colours, finds the chapter headings, and lays everything out in pages you can flip.</p>
         <p class="about-text"><b>Flip pages:</b> tap the left or right side, swipe, or use the arrow keys.</p>
         <p class="about-text"><b>Easy layout:</b> long paragraphs are split into short chunks, lists hidden inside sentences become real lists, and notes, tips and definitions get their own boxes. No words are added or changed. Switch to <i>Original</i> in the menu anytime.</p>
-        <p class="about-text"><b>Vocab sheets:</b> word lists become word cards. Choose <i>Hide</i> next to "Vocab meanings" in the menu to test yourself, then tap a card to reveal it.</p>
+        <p class="about-text"><b>Vocab sheets:</b> choose <i>Vocab list</i> when you upload (or change <i>File type</i> in the menu) and the words become word cards. Choose <i>Hide</i> next to "Vocab meanings" in the menu to test yourself, then tap a card to reveal it.</p>
         <p class="about-text"><b>Typos:</b> small mistakes (common misspellings, a word typed twice, odd spacing) are fixed and get a faint dotted underline. Hold or hover on one to see what it was.</p>
         <p class="about-text"><b>Pictures:</b> tap a picture to see it bigger.</p>
         <p class="about-text"><b>Good to know:</b> scanned PDFs (photos of pages) come through as pictures only, since there's no real text inside. Complex layouts like multi-column magazines may read in a slightly different order.</p>

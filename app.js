@@ -744,7 +744,7 @@
     const skip = first >= 0 && book.blocks[first].t === "h" && simp(stripTags(book.blocks[first].html)) === simp(book.title) ? first : -1;
 
     // easy layout (splits / groups / styles text without rewording it) and small-mistake fixes
-    const disp = settings.easy && window.PDFTidy ? PDFTidy.layout(book.blocks) : book.blocks.map((b, i) => Object.assign({}, b, { i }));
+    const disp = settings.easy && window.PDFTidy ? PDFTidy.layout(book.blocks, { type: book.type || "auto" }) : book.blocks.map((b, i) => Object.assign({}, b, { i }));
     const counter = { n: 0 };
     const fx = (h) => (settings.fixes && window.PDFTidy ? PDFTidy.fixHtml(h, counter, true) : h);
 
@@ -867,6 +867,7 @@
     $("inbox").hidden = true;
     $("reader").hidden = false;
     $("bookTitle").textContent = b.title;
+    syncTypeSeg();
     renderBook();
     page = 0;
     const go = () => layout(b.pos != null ? b.pos : -1);
@@ -896,7 +897,7 @@
               ${envSvg}
               <span class="msg-main">
                 <span class="msg-title">${esc(b.title)}</span>
-                <span class="msg-sub">${esc(b.file)} · ${new Date(b.added).toLocaleDateString()}</span>
+                <span class="msg-sub">${b.type ? `<span class="msg-type">${b.type === "vocab" ? "vocab" : "reading"}</span>` : ""}${esc(b.file)} · ${new Date(b.added).toLocaleDateString()}</span>
               </span>
               <span class="msg-pct">${b.pct ? b.pct + "%" : "NEW"}</span>
             </button>
@@ -913,7 +914,7 @@
       return false;
     }
     const lib = store.get(LIB_KEY, []).filter((x) => x.id !== b.id);
-    lib.unshift({ id: b.id, title: b.title, file: b.file, kind: b.kind, added: b.added, pos: -1, pct: 0 });
+    lib.unshift({ id: b.id, title: b.title, file: b.file, kind: b.kind, type: b.type, added: b.added, pos: -1, pct: 0 });
     return store.set(LIB_KEY, lib);
   }
 
@@ -929,13 +930,39 @@
     $("sendingFill").style.width = Math.round((pct || 0) * 100) + "%";
   }
 
-  async function handleFile(file) {
+  // step 1: check the file, then ask what kind of file it is
+  let pendingFile = null;
+  function handleFile(file) {
     if (!file) return;
     showError("");
     const name = file.name || "file";
     const ext = name.split(".").pop().toLowerCase();
     if (ext === "doc") return showError("Old <b>.doc</b> files can't be opened here. In Word, use <i>File → Save As → .docx</i> and send that instead ♡");
     if (ext !== "pdf" && ext !== "docx") return showError("I can only open <b>.pdf</b> and <b>.docx</b> files.");
+    pendingFile = file;
+    $("typeFile").textContent = name;
+    $("typeSheet").hidden = false;
+    $("typeBackdrop").hidden = false;
+  }
+  function closeTypeSheet() {
+    $("typeSheet").hidden = true;
+    $("typeBackdrop").hidden = true;
+  }
+  $("typeSheet").addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-type]");
+    if (!b || !pendingFile) return;
+    const f = pendingFile;
+    pendingFile = null;
+    closeTypeSheet();
+    processFile(f, b.dataset.type);
+  });
+  $("typeCancel").addEventListener("click", () => { pendingFile = null; closeTypeSheet(); });
+  $("typeBackdrop").addEventListener("click", () => { pendingFile = null; closeTypeSheet(); });
+
+  // step 2: read it
+  async function processFile(file, type) {
+    const name = file.name || "file";
+    const ext = name.split(".").pop().toLowerCase();
 
     setSending(true, 0.05, "Receiving…");
     try {
@@ -958,7 +985,7 @@
       const base = name.replace(/\.(pdf|docx)$/i, "").replace(/[_]+/g, " ").trim();
       const meta = (res.metaTitle || "").trim();
       const title = meta && meta.length < 120 && !/^(untitled|microsoft word|document\d*)\b/i.test(meta) && !/\.(docx?|pdf)$/i.test(meta) ? meta : base;
-      const b = { id: Date.now().toString(36), title, file: name, kind: ext, added: Date.now(), blocks: res.blocks, pos: -1, pct: 0 };
+      const b = { id: Date.now().toString(36), title, file: name, kind: ext, type, added: Date.now(), blocks: res.blocks, pos: -1, pct: 0 };
       const saved = await saveToLibrary(b);
       setTimeout(() => setSending(false), 300);
       openBook(b);
@@ -1081,6 +1108,21 @@
     const b = e.target.closest("button[data-font]");
     if (b) { settings.font = b.dataset.font; applySettings(); relayoutKeepingPlace(); }
   });
+  $("typeSeg").addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-type]");
+    if (!b || !book) return;
+    const cur = firstBlockOnPage();
+    book.type = b.dataset.type;
+    const lib = store.get(LIB_KEY, []);
+    const entry = lib.find((x) => x.id === book.id);
+    if (entry) { entry.type = book.type; store.set(LIB_KEY, lib); }
+    syncTypeSeg();
+    renderBook();
+    requestAnimationFrame(() => layout(cur));
+  });
+  function syncTypeSeg() {
+    document.querySelectorAll("#typeSeg button").forEach((x) => x.classList.toggle("on", !!book && x.dataset.type === (book.type || "reading")));
+  }
   $("layoutSeg").addEventListener("click", (e) => {
     const b = e.target.closest("button[data-easy]");
     if (b && book) { const cur = firstBlockOnPage(); settings.easy = b.dataset.easy === "1"; applySettings(); renderBook(); requestAnimationFrame(() => layout(cur)); }

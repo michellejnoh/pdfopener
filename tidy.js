@@ -182,15 +182,20 @@
 
   // does the text after a line break continue the same sentence?
   const NO_END = /(^|\s)(the|a|an|of|to|in|on|for|with|and|or|but|by|from|at|as|that|which|who|whose|whom|their|his|her|its|our|your|my|is|are|was|were|be|been|being|has|have|had|will|would|can|could|should|may|might|must|into|onto|than|nor|not|this|these|those|such|both|either|neither|between|during|without|within|because|if|when|while|where|whether|also|very|each|every|per|via|versus|vs)$/i;
-  function canContinue(prevText, nextText) {
+  // visual length (Korean/CJK characters count double)
+  const vlen = (t) => t.length + (t.match(/[\u1100-\u11FF\u3130-\u318F\uAC00-\uD7AF\u3040-\u30FF\u4E00-\u9FFF]/g) || []).length;
+  const headingLike = (t) => vlen(t) < 55 && /^[\p{Lu}\p{N}\uAC00-\uD7A3]/u.test(t) && !/[.!?,;:]["”’)]?$/.test(t);
+  // strong = prose: a long line that doesn't end a sentence carries on into the next line, even if that starts with a capital
+  function canContinue(prevText, nextText, strong) {
     const a = (prevText || "").trim(), b = (nextText || "").trim();
     if (a.length < 12 || !b) return false;
-    if (/[.!?:;]["”’)\]]?$/.test(a)) return false; // previous line ended a sentence
+    if (/[.!?:;。]["”’)\]]?$/.test(a)) return false; // previous line ended a sentence
     if (/^([•▪◦●■\-–—*]|\(?\d{1,3}[.)]|\(?[a-z][.)])\s/.test(b)) return false; // next line is a new list item
     if (/^(e\.g\.|eg\b|ex\.|ex:|i\.e\.)/i.test(b)) return false; // an example line starts something new
     if (/^[\p{Ll}(\[]/u.test(b)) return true; // continues in lowercase
     if (/[,\-–—\/(&+]$/.test(a)) return true; // broke after a comma, dash, slash…
-    return NO_END.test(a); // broke after "the", "a", "of", "and"…
+    if (NO_END.test(a)) return true; // broke after "the", "a", "of", "and"…
+    return !!strong && vlen(a) >= 45 && !headingLike(b) && !headingLike(a);
   }
 
   // ---------- vocab sheets ----------
@@ -202,10 +207,10 @@
     { re: /\s*[:：]\s+/g },                        // abandon: to leave
     { re: /\s+(?=[\uAC00-\uD7A3])/g, ko: true },  // abandon 버리다
   ];
-  function parseEntry(html) {
+  function parseEntry(html, loose) {
     let h = (html || "").trim();
     let num = "";
-    const nm = /^(\d{1,3})[.)]\s+/.exec(h);
+    const nm = (loose ? /^(\d{1,3})[.)]?\s+/ : /^(\d{1,3})[.)]\s+/).exec(h);
     if (nm) { num = nm[1]; h = h.slice(nm[0].length); }
     const all = stripTags(h);
     if (!all || all.length > 420) return null;
@@ -222,6 +227,98 @@
     return null;
   }
   const EXAMPLE = /^\s*(e\.g\.|eg\b|ex\b|ex\.|example|syn|ant|synonyms?|antonyms?|→|=|\*|\(|["“'‘])/i;
+
+  function tableVocab(b, force) {
+    const rows = [...b.html.matchAll(/<tr>([\s\S]*?)<\/tr>/g)].map((r) => [...r[1].matchAll(/<t[dh]>([\s\S]*?)<\/t[dh]>/g)].map((c) => c[1].trim()));
+    const good = rows.filter((r) => r.length >= 2 && r.length <= 6 && stripTags(r[0]) && stripTags(r[0]).length <= 40 && stripTags(r[0]).split(/\s+/).length <= 5);
+    if (!(rows.length >= (force ? 2 : 3) && good.length >= rows.length * (force ? 0.5 : 0.7))) return null;
+    let head = "";
+    const first = rows[0].map(stripTags).join(" ").toLowerCase();
+    if (/(word|term|vocab|meaning|definition|example|단어|뜻|의미|예문|번호|no\.?)/.test(first) && rows[0].every((c) => stripTags(c).length < 25)) head = rows.shift().map(stripTags).filter(Boolean).join(" · ");
+    const entries = rows.filter((r) => r.some((c) => stripTags(c))).map((r) => {
+      const cells = r.filter((c) => stripTags(c));
+      let num = "";
+      if (cells.length > 2 && /^\d{1,3}[.)]?$/.test(stripTags(cells[0]))) num = stripTags(cells.shift()).replace(/[.)]$/, "");
+      const termH = cells.shift() || "";
+      let pos = "";
+      if (cells.length > 1 && new RegExp("^\\(?" + POS + "\\.?\\)?$", "i").test(stripTags(cells[0]))) pos = stripTags(cells.shift());
+      return { i: b.i, num, termH, pos, defH: cells.shift() || "", ex: cells };
+    });
+    return entries.length ? { t: "vocab", i: b.i, head, entries } : null;
+  }
+
+  // vocab mode: the whole file is a word list, so read it line by line as words, meanings and examples
+  const looksLikeTerm = (t) => t.length <= 40 && t.split(/\s+/).length <= 5 && !/[.!?;:,]["”’)]?$/.test(t) && !EXAMPLE.test(t);
+  const WEAK = /^((?:\d{1,3}[.)]?\s+)?[A-Za-zÀ-ÿ][\w'’-]*)\s+(?=(?:to|a|an|the|someone|something|one|being|having|not|of|in|that|which|who|very|causing|showing|lacking|full)\s)/;
+  function vocabForce(blocks) {
+    const out = [];
+    let entries = [], cur = null;
+    const flush = () => {
+      const tail = [];
+      while (entries.length && !entries[entries.length - 1].defH && !entries[entries.length - 1].ex.length) tail.unshift(entries.pop());
+      if (entries.length) out.push({ t: "vocab", i: entries[0].i, entries });
+      tail.forEach((e) => out.push({ t: "p", i: e.i, html: (e.num ? e.num + " " : "") + e.termH }));
+      entries = [];
+      cur = null;
+    };
+    const lines = [];
+    for (const b of blocks) {
+      if (b.t === "p" || b.t === "quote") lines.push({ html: b.html, i: b.i });
+      else if (b.t === "ul" || b.t === "ol") {
+        b.items.forEach((h, j) => {
+          lines.push({ html: h, i: b.i, num: b.t === "ol" ? String((b.start || 1) + j) : "" });
+          ((b.ex && b.ex[j]) || []).forEach((x) => lines.push({ html: x, i: b.i }));
+        });
+      } else if (b.t === "table") lines.push({ block: tableVocab(b, true) || b });
+      else lines.push({ block: b });
+    }
+    for (const ln of lines) {
+      if (ln.block) { flush(); out.push(ln.block); continue; }
+      const text = stripTags(ln.html);
+      if (!text) continue;
+      const strict = parseEntry(ln.html, true);
+      if (strict) {
+        if (cur && !cur.defH && !cur.ex.length) {
+          // a lone line right before a full "word – meaning" line is a section label, not a word
+          const label = cur;
+          entries.pop();
+          flush();
+          out.push({ t: "h", lvl: 3, pseudo: true, i: label.i, html: (label.num ? label.num + " " : "") + label.termH });
+        }
+        cur = Object.assign(strict, { i: ln.i, num: strict.num || ln.num || "" });
+        entries.push(cur);
+        continue;
+      }
+      if (cur && !cur.defH && !EXAMPLE.test(text)) { cur.defH = ln.html; continue; } // meaning on the line under the word
+      if (cur && EXAMPLE.test(text)) { cur.ex.push(ln.html); continue; }
+      const wm = WEAK.exec(ln.html);
+      if (wm && !(/^\p{Lu}/u.test(text) && /[.!?]$/.test(text))) {
+        const nm = /^(\d{1,3})[.)]?\s+/.exec(wm[1]);
+        cur = { i: ln.i, num: nm ? nm[1] : ln.num || "", termH: nm ? wm[1].slice(nm[0].length) : wm[1], pos: "", defH: ln.html.slice(wm[0].length).trim(), ex: [] };
+        entries.push(cur);
+        continue;
+      }
+      if (cur && cur.defH) {
+        const lastH = cur.ex.length ? cur.ex[cur.ex.length - 1] : cur.defH;
+        const lt = stripTags(lastH);
+        if (!/[.!?:;]$/.test(lt) && (/[,\-–—\/(&+]$/.test(lt) || NO_END.test(lt))) {
+          if (cur.ex.length) cur.ex[cur.ex.length - 1] += " " + ln.html; else cur.defH += " " + ln.html;
+          continue;
+        }
+      }
+      if (looksLikeTerm(text)) {
+        const nm = /^(\d{1,3})[.)]?\s+/.exec(ln.html);
+        cur = { i: ln.i, num: nm ? nm[1] : ln.num || "", termH: nm ? ln.html.slice(nm[0].length) : ln.html, pos: "", defH: "", ex: [] };
+        entries.push(cur);
+        continue;
+      }
+      if (cur) { cur.ex.push(ln.html); continue; } // extra notes stay with their word
+      flush();
+      out.push({ t: "p", i: ln.i, html: ln.html }); // instructions before the word list
+    }
+    flush();
+    return out;
+  }
 
   function vocabPass(blocks) {
     const out = [];
@@ -247,24 +344,8 @@
       }
       // a table whose first column is short words
       if (b.t === "table") {
-        const rows = [...b.html.matchAll(/<tr>([\s\S]*?)<\/tr>/g)].map((r) => [...r[1].matchAll(/<t[dh]>([\s\S]*?)<\/t[dh]>/g)].map((c) => c[1].trim()));
-        const good = rows.filter((r) => r.length >= 2 && r.length <= 5 && stripTags(r[0]) && stripTags(r[0]).length <= 40 && stripTags(r[0]).split(/\s+/).length <= 5);
-        if (rows.length >= 3 && good.length >= rows.length * 0.7) {
-          let head = "";
-          const first = rows[0].map(stripTags).join(" ").toLowerCase();
-          if (/(word|term|vocab|meaning|definition|example|단어|뜻|의미|예문)/.test(first) && rows[0].every((c) => stripTags(c).length < 25)) head = rows.shift().map(stripTags).filter(Boolean).join(" · ");
-          const entries = rows.filter((r) => stripTags(r[0])).map((r) => {
-            const cells = r.slice(1).filter((c) => stripTags(c));
-            let pos = "";
-            if (cells.length > 1 && new RegExp("^\\(?" + POS + "\\.?\\)?$", "i").test(stripTags(cells[0]))) pos = stripTags(cells.shift());
-            let num = "", termH = r[0];
-            const nm = /^(\d{1,3})[.)]?$/.exec(stripTags(r[0]));
-            if (nm && cells.length > 1) { num = nm[1]; termH = cells.shift(); }
-            return { i: b.i, num, termH, pos, defH: cells.shift() || "", ex: cells };
-          });
-          out.push({ t: "vocab", i: b.i, head, entries });
-          continue;
-        }
+        const v = tableVocab(b, false);
+        if (v) { out.push(v); continue; }
       }
       // a run of paragraphs that are "word – meaning" lines (example lines in between stick to their word)
       if (b.t === "p" && parseEntry(b.html)) {
@@ -291,7 +372,15 @@
     return out;
   }
 
-  function layout(src) {
+  // type: "reading" (prose), "vocab" (word list) or "auto" (older books: guess)
+  function layout(src, opts) {
+    const type = (opts && opts.type) || "auto";
+    if (type === "vocab") {
+      const copy = src.map((b, i) => Object.assign({}, b, { i }));
+      const out = vocabForce(copy);
+      return out.flatMap((b) => (b.t === "p" ? layoutParagraph(b) : [b]));
+    }
+    const strong = true;
     // 1. rejoin text that was broken in the middle of a sentence (into the paragraph or list item before it)
     const blocks = [];
     for (const [i, b0] of src.entries()) {
@@ -307,7 +396,7 @@
       const vocabBoundary = lastText && parseEntry(lastText) && (parseEntry(b.html) || EXAMPLE.test(stripTags(b.html)));
       if (b.t === "p" && last && !vocabBoundary) {
         const nt = stripTags(b.html);
-        if (last.t === "p" && canContinue(stripTags(last.html), nt)) { last.html += " " + b.html; continue; }
+        if (last.t === "p" && canContinue(stripTags(last.html), nt, strong)) { last.html += " " + b.html; continue; }
         if ((last.t === "ul" || last.t === "ol") && last.items.length && canContinue(stripTags(last.items[last.items.length - 1]), nt)) {
           last.items[last.items.length - 1] += " " + b.html;
           continue;
@@ -317,8 +406,8 @@
       blocks.push(b);
     }
 
-    // 1b. vocabulary lists / tables -> word cards
-    const vb = vocabPass(blocks).flatMap((b) => {
+    // 1b. vocabulary lists / tables -> word cards (only guessed for older books; reading material stays text)
+    const vb = (type === "auto" ? vocabPass(blocks) : blocks).flatMap((b) => {
       if (!b.ex || !b.ex.some((x) => x.length)) return [b];
       return b.items.flatMap((it, j) => [{ t: b.t, i: b.i, items: [it], start: (b.start || 1) + j }, ...b.ex[j].map((h) => ({ t: "p", i: b.i, html: h }))]);
     });
