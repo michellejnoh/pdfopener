@@ -180,16 +180,34 @@
     return chunk(b, splitSentences(b.html)) || [b];
   }
 
+  // does the text after a line break continue the same sentence?
+  const NO_END = /(^|\s)(the|a|an|of|to|in|on|for|with|and|or|but|by|from|at|as|that|which|who|whose|whom|their|his|her|its|our|your|my|is|are|was|were|be|been|being|has|have|had|will|would|can|could|should|may|might|must|into|onto|than|nor|not|this|these|those|such|both|either|neither|between|during|without|within|because|if|when|while|where|whether|also|very|each|every|per|via|versus|vs)$/i;
+  function canContinue(prevText, nextText) {
+    const a = (prevText || "").trim(), b = (nextText || "").trim();
+    if (a.length < 12 || !b) return false;
+    if (/[.!?:;]["”’)\]]?$/.test(a)) return false; // previous line ended a sentence
+    if (/^([•▪◦●■\-–—*]|\(?\d{1,3}[.)]|\(?[a-z][.)])\s/.test(b)) return false; // next line is a new list item
+    if (/^[\p{Ll}(\[]/u.test(b)) return true; // continues in lowercase
+    if (/[,\-–—\/(&+]$/.test(a)) return true; // broke after a comma, dash, slash…
+    return NO_END.test(a); // broke after "the", "a", "of", "and"…
+  }
+
   function layout(src) {
-    // 1. rejoin paragraphs that were broken in the middle of a sentence
+    // 1. rejoin text that was broken in the middle of a sentence (into the paragraph or list item before it)
     const blocks = [];
     for (const [i, b0] of src.entries()) {
       const b = Object.assign({}, b0, { i });
+      if (b.items) b.items = b.items.slice();
       const last = blocks[blocks.length - 1];
-      if (b.t === "p" && last && last.t === "p") {
-        const lt = stripTags(last.html), nt = stripTags(b.html);
-        if (lt.length > 30 && /[\p{L},]$/u.test(lt) && /^\p{Ll}/u.test(nt)) { last.html += " " + b.html; continue; }
+      if (b.t === "p" && last) {
+        const nt = stripTags(b.html);
+        if (last.t === "p" && canContinue(stripTags(last.html), nt)) { last.html += " " + b.html; continue; }
+        if ((last.t === "ul" || last.t === "ol") && last.items.length && canContinue(stripTags(last.items[last.items.length - 1]), nt)) {
+          last.items[last.items.length - 1] += " " + b.html;
+          continue;
+        }
       }
+      if ((b.t === "ul" || b.t === "ol") && last && last.t === b.t) { last.items.push(...b.items); continue; }
       blocks.push(b);
     }
 
@@ -298,5 +316,5 @@
     return tokens(html || "").map((t) => (isTag(t) ? t : fixText(t, counter, mark))).join("");
   }
 
-  window.PDFTidy = { layout, fixHtml, splitSentences };
+  window.PDFTidy = { layout, fixHtml, splitSentences, canContinue };
 })();

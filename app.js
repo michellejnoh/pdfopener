@@ -499,6 +499,14 @@
         else blocks.push({ t: type, items: [item] });
         continue;
       }
+      // a line that only continues the previous paragraph / list item (broken by a line change)
+      const prevB = blocks[blocks.length - 1];
+      const cont = window.PDFTidy && PDFTidy.canContinue;
+      if (cont && prevB && prevB.t === "p" && cont(stripTags(prevB.html), text)) { prevB.html += " " + segsHtml(p.segs); continue; }
+      if (cont && prevB && (prevB.t === "ul" || prevB.t === "ol") && cont(stripTags(prevB.items[prevB.items.length - 1]), text)) {
+        prevB.items[prevB.items.length - 1] += " " + segsHtml(p.segs);
+        continue;
+      }
       blocks.push({ t: "p", html: segsHtml(p.segs) });
     }
     return blocks;
