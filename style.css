@@ -765,7 +765,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 
 /* sliced PDFs */
-.pages figure.slice { margin: 0 0 .35em; }
+.pages figure.slice { margin: .35em 0 0; }
+.pages figure.slice.cont { margin-top: 0; }
 /* the white of the page melts into the screen, so pieces read like text, not boxes */
 .pages figure.slice img { border: 0; border-radius: 0; background: transparent; mix-blend-mode: multiply; cursor: zoom-in; }
 [data-theme="night"] .pages figure.slice img { filter: invert(1) hue-rotate(180deg); mix-blend-mode: screen; }
@@ -775,6 +776,20 @@ button { font: inherit; color: inherit; cursor: pointer; }
   font-family: var(--pixel); font-size: 10px; color: var(--muted);
   break-after: avoid;
 }
-.pages .pagemark::before, .pages .pagemark::after { content: ""; flex: 1; border-top: 2px dotted var(--lcd-line); }
+.pages .pagemark span { flex: none; white-space: nowrap; }
+.pages .pagemark::before, .pages .pagemark::after { content: ""; flex: 1 1 0; min-width: 12px; border-top: 2px dotted var(--lcd-line); }
+/* PDF page list in the menu: numbers in rows */
+.toc.grid { display: flex; flex-wrap: wrap; gap: 6px; padding: 2px 0 4px; }
+.toc.grid li button {
+  width: 46px;
+  padding: 7px 0;
+  text-align: center;
+  font-family: var(--pixel);
+  font-size: 12px;
+  border: 2px solid var(--lcd-line);
+  border-radius: 8px;
+}
+.toc.grid li.here button { background: var(--pink-500); border-color: var(--pink-500); color: #fff; }
+.toc.grid li.here button::before { content: none; }
 
 .pages .the-end.loading { animation: blink 1.2s steps(2, jump-none) infinite; }

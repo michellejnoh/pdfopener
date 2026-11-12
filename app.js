@@ -759,13 +759,13 @@
         <div class="cover-meta">from: ${esc(book.file)}<br>${pages} page${pages === 1 ? "" : "s"} · cut to fit your phone</div>
         <div class="cover-hint">tap the right side or swipe to start ▶</div>
       </div>${body}<div class="the-end">— end of message —<br>♡</div>`;
-    $("toc").innerHTML = book.blocks.map((b, i) => (b.t === "pagemark" ? `<li data-i="${i}"><button type="button" data-i="${i}">Page ${b.n}</button></li>` : "")).join("");
+    $("toc").innerHTML = book.blocks.map((b, i) => (b.t === "pagemark" ? `<li data-i="${i}"><button type="button" data-i="${i}" aria-label="Page ${b.n}">${b.n}</button></li>` : "")).join("");
     $("tocLabel").textContent = "Pages";
     updateLoadingNote();
   }
   const sliceHtml = (b, i) =>
-    b.t === "pagemark" ? `<div class="pagemark" data-i="${i}">page ${b.n}</div>`
-    : b.t === "slice" ? `<figure class="pic slice" data-i="${i}"><img src="${b.src}" alt="" data-w="${b.w}" data-h="${b.h}" decoding="async"></figure>` : "";
+    b.t === "pagemark" ? `<div class="pagemark" data-i="${i}"><span>page ${b.n}</span></div>`
+    : b.t === "slice" ? `<figure class="pic slice${b.cont ? " cont" : ""}" data-i="${i}"><img src="${b.src}" alt="" data-w="${b.w}" data-h="${b.h}" decoding="async"></figure>` : "";
   // add newly prepared pages to the open book without losing your place
   function appendSlices(newBlocks, start) {
     const el = $("pages");
@@ -773,7 +773,7 @@
     if (!end) return;
     const cur = firstBlockOnPage();
     end.insertAdjacentHTML("beforebegin", newBlocks.map((b, j) => sliceHtml(b, start + j)).join(""));
-    $("toc").insertAdjacentHTML("beforeend", newBlocks.map((b, j) => (b.t === "pagemark" ? `<li data-i="${start + j}"><button type="button" data-i="${start + j}">Page ${b.n}</button></li>` : "")).join(""));
+    $("toc").insertAdjacentHTML("beforeend", newBlocks.map((b, j) => (b.t === "pagemark" ? `<li data-i="${start + j}"><button type="button" data-i="${start + j}" aria-label="Page ${b.n}">${b.n}</button></li>` : "")).join(""));
     layout(cur);
   }
   function updateLoadingNote() {
@@ -785,6 +785,7 @@
 
   function renderBook() {
     document.querySelectorAll(".text-only").forEach((r) => (r.hidden = book.mode === "slices"));
+    $("toc").classList.toggle("grid", book.mode === "slices");
     if (book.mode === "slices") return renderSlices();
     $("tocLabel").textContent = "Contents";
     const el = $("pages");

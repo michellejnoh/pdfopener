@@ -53,7 +53,8 @@
   const pct = (arr, p) => { if (!arr.length) return 0; const s = [...arr].sort((a, b) => a - b); return s[Math.min(s.length - 1, Math.floor(s.length * p))]; };
 
   // ---------- page layout ----------
-  function analyse(ink, W, H) {
+  // expectH: expected height of one text line in analysis pixels (from the PDF's font size; 0 if unknown)
+  function analyse(ink, W, H, expectH) {
     const rowEmpty = (x0, x1) => (y) => ink(x0, y, x1, y + 1) <= 1;
     const colEmpty = (y0, y1) => (x) => ink(x, y0, x + 1, y1) <= 1;
     const rr = runs(H, rowEmpty(0, W)).filter((r) => !r.empty);
@@ -85,10 +86,34 @@
       }
       return full / ls.length;
     };
+    // a gutter between two columns, found once for the whole page: a vertical strip near the middle that stays
+    // (almost) blank from top to bottom, with text lines that run to the edge on both sides
+    let gutter = null;
+    {
+      const rows = cy1 - cy0;
+      let best = null, runStart = -1;
+      for (let x = Math.round(cx0 + cw * 0.3); x <= Math.round(cx0 + cw * 0.7) + 1; x++) {
+        const blank = x <= cx0 + cw * 0.7 && ink(x, cy0, x + 1, cy1) <= rows * 0.2;
+        if (blank && runStart < 0) runStart = x;
+        if (!blank && runStart >= 0) {
+          if (x - runStart >= Math.max(8, W * 0.012) && (!best || x - runStart > best[1] - best[0])) best = [runStart, x];
+          runStart = -1;
+        }
+      }
+      if (best && fillRatio(cx0, best[0], cy0, cy1) >= 0.4 && fillRatio(best[1], cx1, cy0, cy1) >= 0.4) gutter = best;
+    }
+
     const regions = [];
     for (const [y0, y1] of bands) {
       let split = null;
-      if (y1 - y0 >= H * 0.06) {
+      // this part of the page keeps to the page's columns: split it there, however short it is
+      if (gutter && ink(gutter[0], y0, gutter[1], y1) === 0 && ink(cx0, y0, gutter[0], y1) > 0 && ink(gutter[1], y0, cx1, y1) > 0) {
+        let l = gutter[0], r = gutter[1];
+        while (l > cx0 && ink(l - 1, y0, l, y1) === 0) l--;
+        while (r < cx1 && ink(r, y0, r + 1, y1) === 0) r++;
+        split = [l, r];
+      }
+      if (!split && y1 - y0 >= H * 0.06) {
         const gaps = runs(cw, (x) => colEmpty(y0, y1)(x + cx0)).filter((r) => r.empty && r.a > 0 && r.b < cw);
         for (const g of gaps) {
           const mid = (g.a + g.b) / 2 / cw;
@@ -102,9 +127,93 @@
       else regions.push({ x0: cx0, x1: cx1, y0, y1 });
     }
 
-    // lines and their words
+    // lines that touch each other (tight spacing) come out as one tall block: split such blocks at the faint
+    // rows between lines, but only where the pieces come out about one line tall (pictures stay whole)
+    const typical = expectH || median(regions.flatMap((g) => linesIn(g.x0, g.x1, g.y0, g.y1).map(([a, b]) => b - a)).filter((h) => h >= 4)) || 12;
+    // pieces much thinner than a line join the closest neighbour (above if it is close enough, else below)
+    function mergeSlivers(list) {
+      const out = list.map((r) => r.slice());
+      for (let i = 0; i < out.length; i++) {
+        const [p, q] = out[i];
+        if (q - p >= typical * 0.4 || out.length < 2) continue;
+        const gapUp = i > 0 ? p - out[i - 1][1] : Infinity;
+        const gapDown = i < out.length - 1 ? out[i + 1][0] - q : Infinity;
+        if (Math.min(gapUp, gapDown) > typical * 0.5) continue; // a real small mark on its own (e.g. a dash)
+        if (gapUp <= gapDown) out[i - 1][1] = q; else out[i + 1][0] = p;
+        out.splice(i, 1);
+        i--;
+      }
+      return out;
+    }
+      // every piece must look like a line of text: about one line tall, with many separate bits of ink across it
+    let tlX0 = 0, tlX1 = 0;
+    const textLike = ([p, q]) => {
+    const x0 = tlX0, x1 = tlX1;
+      if (q - p < typical * 0.45 || q - p > typical * 1.6) return false;
+      let bits = 0, inInk = false;
+      for (let x = x0; x < x1; x++) {
+        const on = ink(x, p, x + 1, q) > 0;
+        if (on && !inInk) bits++;
+        inInk = on;
+      }
+      const density = ink(x0, p, x1, q) / Math.max(1, (x1 - x0) * (q - p));
+      return bits >= 4 && density > 0.02 && density < 0.45; // letters are sparse; photos are dense
+    };
+    const splitTall = (x0, x1, a, b) => {
+      tlX0 = x0; tlX1 = x1;
+      if (b - a < typical * 1.7) return [[a, b]];
+      const rows = [];
+      let max = 0;
+      for (let y = a; y < b; y++) { const v = ink(x0, y, x1, y + 1); rows.push(v); if (v > max) max = v; }
+      const cuts = [];
+      let y = a + Math.round(typical * 0.55);
+      while (y < b - typical * 0.45) {
+        // the faintest row in the next line's worth of rows
+        let best = -1, bestV = Infinity;
+        for (let t = y; t < Math.min(b - 1, y + Math.round(typical * 1.1)); t++) if (rows[t - a] < bestV) { bestV = rows[t - a]; best = t; }
+        if (best < 0 || bestV > max * 0.62) return peel(x0, x1, a, b, rows, max); // no clear gap between lines: a picture
+        cuts.push(best);
+        y = best + Math.round(typical * 0.55);
+      }
+      let out = [];
+      let top = a;
+      for (const c of cuts) { out.push([top, c]); top = c + 1; }
+      out.push([top, b]);
+      out = mergeSlivers(out);
+      if (out.length < 2) return [[a, b]];
+      return out.every(textLike) ? out : peel(x0, x1, a, b, rows, max);
+    };
+    // a picture with a line of text touching it above or below: take the text line off, keep the picture whole
+    function peel(x0, x1, a, b, rows, max) {
+      // walk away from the text line through its faint edge (letter tails) until the picture starts; cut at the
+      // faintest row of that stretch, so neither letter tails nor a picture edge end up on the wrong side
+      const edgeCut = (from, to, step, refFrom, refTo) => {
+        let ref = 0;
+        for (let t = Math.max(a, refFrom); t < Math.min(b, refTo); t++) ref = Math.max(ref, rows[t - a]);
+        let best = -1, bestV = Infinity;
+        for (let t = from; step > 0 ? t < to : t > to; t += step) {
+          if (t <= a || t >= b - 1) return -1;
+          const v = rows[t - a];
+          if (v > ref * 0.6 && best >= 0) return best; // the picture begins
+          if (v <= bestV && v <= ref * 0.06) { bestV = v; best = t; }
+        }
+        return -1;
+      };
+      const out = [];
+      let top = a, bottom = b;
+      const c1 = edgeCut(a + Math.round(typical * 0.7), a + Math.round(typical * 1.8), 1, a, a + Math.round(typical * 0.7));
+      if (c1 > 0 && b - c1 > typical && textLike([a, c1])) { out.push([a, c1]); top = c1 + 1; }
+      const c2 = edgeCut(b - Math.round(typical * 0.7), b - Math.round(typical * 1.8), -1, b - Math.round(typical * 0.7), b);
+      const tail = c2 > top + typical && textLike([c2 + 1, b]) ? [c2 + 1, b] : null;
+      if (tail) bottom = c2;
+      out.push([top, bottom]);
+      if (tail) out.push(tail);
+      return out;
+    }
+
+    // lines and their words (a sliver — a detached letter tail or accent — is put back on its own line)
     for (const g of regions) {
-      g.lines = linesIn(g.x0, g.x1, g.y0, g.y1).map(([a, b]) => {
+      g.lines = mergeSlivers(linesIn(g.x0, g.x1, g.y0, g.y1)).flatMap(([a, b]) => splitTall(g.x0, g.x1, a, b)).map(([a, b]) => {
         const parts = runs(g.x1 - g.x0, (x) => ink(x + g.x0, a, x + g.x0 + 1, b) === 0).filter((r) => !r.empty).map((r) => [r.a + g.x0, r.b + g.x0]);
         // baseline ≈ lowest row that is still well filled (descenders are sparse)
         let maxRow = 0;
@@ -113,6 +222,12 @@
         let base = b;
         for (let y = b - 1; y >= a; y--) if (rowInk[y - a] >= maxRow * 0.35) { base = y + 1; break; }
         return { a, b, h: b - a, base, parts, x0: parts.length ? parts[0][0] : g.x0, x1: parts.length ? parts[parts.length - 1][1] : g.x1 };
+      });
+      // margins around a line never reach more than halfway to its neighbours
+      g.lines.forEach((l, i) => {
+        const up = i ? l.a - g.lines[i - 1].b : 6, down = i < g.lines.length - 1 ? g.lines[i + 1].a - l.b : 6;
+        l.pt = Math.max(0, Math.min(3, Math.floor(up / 2)));
+        l.pb = Math.max(0, Math.min(3, Math.floor(down / 2)));
       });
     }
     return { regions, W, H, ink };
@@ -195,7 +310,8 @@
     actx.imageSmoothingQuality = "medium";
     actx.drawImage(hi, 0, 0, a.width, a.height);
     const W = a.width, H = a.height;
-    const { regions, ink } = analyse(inkTable(actx.getImageData(0, 0, W, H), W, H), W, H);
+    const expectH = fontPt > 2 ? fontPt * 0.97 * aScale : 0;
+    const { regions, ink } = analyse(inkTable(actx.getImageData(0, 0, W, H), W, H), W, H, expectH);
     a.width = a.height = 0;
     if (!regions.length) { hi.width = hi.height = 0; return []; }
 
@@ -211,10 +327,10 @@
     const pieces = [];
 
     // a piece kept exactly as it is on the page (pictures, tables that don't reflow, odd lines)
-    const keep = (x0, x1, y0, y1) => {
+    const keep = (x0, x1, y0, y1, pt = 3, pb = 3) => {
       const pad = 3;
-      const sx = Math.max(0, Math.floor((x0 - pad) * k)), sy = Math.max(0, Math.floor((y0 - pad) * k));
-      const sw = Math.min(hi.width - sx, Math.ceil((x1 - x0 + pad * 2) * k)), sh = Math.min(hi.height - sy, Math.ceil((y1 - y0 + pad * 2) * k));
+      const sx = Math.max(0, Math.floor((x0 - pad) * k)), sy = Math.max(0, Math.floor((y0 - pt) * k));
+      const sw = Math.min(hi.width - sx, Math.ceil((x1 - x0 + pad * 2) * k)), sh = Math.min(hi.height - sy, Math.ceil((y1 - y0 + pt + pb) * k));
       if (sw < 4 || sh < 4) return;
       const c = document.createElement("canvas");
       c.width = sw;
@@ -253,8 +369,9 @@
             const gap = cur.items.length ? (w.cellBreak && ci === 0 ? cellSpace : ci > 0 ? 0 : origSpace) : 0;
             if (cur.items.length && cur.x + gap + ww > outW) newLine(hang);
             const g2 = cur.items.length ? gap : 0;
-            const asc = (line.base - line.a + 1) * k, desc = (line.b - line.base + 1) * k;
-            cur.items.push({ sx: (ch.a - 1) * k, sy: (line.a - 1) * k, sw: ww, sh: (line.b - line.a + 2) * k, dx: cur.x + g2, asc });
+            const pt = Math.min(1, line.pt), pb = Math.min(1, line.pb);
+            const asc = (line.base - line.a + pt) * k, desc = (line.b - line.base + pb) * k;
+            cur.items.push({ sx: (ch.a - 1) * k, sy: (line.a - pt) * k, sw: ww, sh: (line.b - line.a + pt + pb) * k, dx: cur.x + g2, asc });
             cur.x += g2 + ww;
             cur.asc = Math.max(cur.asc, asc);
             cur.desc = Math.max(cur.desc, desc);
@@ -265,7 +382,7 @@
       for (let i = 0; i < out.length; i += MAX_LINES_PER_PIECE) {
         const ls = out.slice(i, i + MAX_LINES_PER_PIECE).filter((l) => l.items.length);
         if (!ls.length) continue;
-        const height = Math.ceil(ls.reduce((s, l) => s + l.asc + l.desc, 0) + lineGap * (ls.length - 1) + 4);
+        const height = Math.ceil(ls.reduce((s, l) => s + l.asc + l.desc, 0) + lineGap * (ls.length - 1) + 4 + Math.round(lineGap / 2));
         const c = document.createElement("canvas");
         c.width = outW;
         c.height = height;
@@ -281,7 +398,7 @@
           }
           y += l.asc + l.desc + lineGap;
         }
-        pieces.push({ src: encode(c), w: OUT_CSS_W, h: Math.round(height / pxPerCss) });
+        pieces.push({ src: encode(c), w: OUT_CSS_W, h: Math.round(height / pxPerCss), cont: i > 0 });
         c.width = c.height = 0;
       }
     };
@@ -320,7 +437,7 @@
         if ((l.b < H * 0.07 || l.a > H * 0.93) && l.x1 - l.x0 < W * 0.12 && l.h < textH * 1.6) return;
         const words = wordsOf(l, Math.max(wordGap, l.h * 0.21), cellGap);
         const odd = l.h > textH * 1.9 || !words.length; // picture, or lines that touch each other
-        if (odd) { flush(); keep(l.x0, l.x1, l.a, l.b); return; }
+        if (odd) { flush(); keep(l.x0, l.x1, l.a, l.b, l.pt, l.pb); return; }
         l.words = words;
         const prev = i > 0 ? lines[i - 1] : null;
         const prevInPara = para && para.lines[para.lines.length - 1] === prev ? prev : null;
@@ -367,7 +484,7 @@
     for (let n = 1; n <= pdf.numPages; n++) {
       const page = await pdf.getPage(n);
       const pageBlocks = [{ t: "pagemark", n }];
-      for (const p of await slicePage(page)) pageBlocks.push({ t: "slice", src: p.src, w: p.w, h: p.h, page: n });
+      for (const p of await slicePage(page)) pageBlocks.push(Object.assign({ t: "slice", src: p.src, w: p.w, h: p.h, page: n }, p.cont ? { cont: true } : {}));
       page.cleanup();
       blocks.push(...pageBlocks);
       if (onProgress) onProgress(n / pdf.numPages, n, pdf.numPages);
