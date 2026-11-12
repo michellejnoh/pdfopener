@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>PDFopener ♡ pocket e-books from your files</title>
+  <meta name="description" content="Upload a PDF or Word document and read it as a cute, mobile-friendly e-book.">
+  <meta name="theme-color" content="#d4a5ad">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="icons/favicon-32.png" sizes="32x32" type="image/png">
+  <link rel="alternate icon" href="favicon.ico">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="stylesheet" href="fonts/fonts.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="phone">
+    <div class="phone-top" aria-hidden="true">
+      <span class="speaker"></span>
+    </div>
+
+    <div class="screen" id="screen">
+      <!-- status bar -->
+      <div class="statusbar" aria-hidden="true">
+        <span class="signal"><i></i><i></i><i></i><i></i></span>
+        <span class="carrier">PDFopener</span>
+        <span class="clock" id="clock">12:00</span>
+        <span class="battery"><i id="batteryFill"></i></span>
+      </div>
+
+      <!-- ========== INBOX ========== -->
+      <section class="view" id="inbox">
+        <header class="titlebar">
+          <span class="tb-icon" aria-hidden="true">✉</span>
+          <h1 class="tb-title">Inbox</h1>
+          <span class="tb-count" id="inboxCount"></span>
+        </header>
+
+        <div class="view-body">
+          <div class="brand">
+            <img src="favicon.svg" alt="" class="brand-icon">
+            <div>
+              <div class="brand-name">PDFopener</div>
+              <div class="brand-tag">pocket e-books ♡ est. 2003*</div>
+            </div>
+          </div>
+
+          <div class="bubble in">
+            <div class="bubble-meta">From: PDFopener · now</div>
+            hi! send me a <b>PDF</b> or <b>Word</b> file and i'll turn it into a little e-book you can read on your phone. everything stays on your device ♡
+          </div>
+
+          <label class="dropzone" id="dropzone" for="fileInput">
+            <input type="file" id="fileInput" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" hidden>
+            <span class="dz-env" aria-hidden="true">
+              <svg viewBox="0 0 22 16" shape-rendering="crispEdges"><path fill="#86525f" d="M1 1h20v1H1zM1 14h20v1H1zM1 2h1v12H1zM20 2h1v12h-1zM2 2h1v1H2zM3 3h1v1H3zM4 4h1v1H4zM5 5h1v1H5zM6 6h1v1H6zM7 7h1v1H7zM8 8h1v1H8zM9 9h4v1H9zM13 8h1v1h-1zM14 7h1v1h-1zM15 6h1v1h-1zM16 5h1v1h-1zM17 4h1v1h-1zM18 3h1v1h-1zM19 2h1v1h-1z"/><path fill="#b06f7e" d="M10 11h1v1h-1zM12 11h1v1h-1zM10 12h3v1h-3zM11 13h1v1h-1z"/></svg>
+            </span>
+            <span class="dz-title">New message</span>
+            <span class="dz-sub">tap to choose a file · or drop it here</span>
+            <span class="dz-types">.pdf · .docx</span>
+          </label>
+
+          <div class="sending" id="sending" hidden>
+            <div class="sending-label" id="sendingLabel">Sending…</div>
+            <div class="sending-bar"><i id="sendingFill"></i></div>
+          </div>
+
+          <div class="error-bubble" id="errorBox" hidden></div>
+
+          <h2 class="section-label" id="savedLabel" hidden>Saved books</h2>
+          <ul class="msg-list" id="library"></ul>
+
+          <p class="footnote">*not really. files are read in your browser and never uploaded anywhere.</p>
+        </div>
+
+        <nav class="softkeys">
+          <button type="button" id="skAbout">About</button>
+          <button type="button" class="sk-main" id="skOpen">Open</button>
+          <button type="button" id="skClear">Clear</button>
+        </nav>
+      </section>
+
+      <!-- ========== READER ========== -->
+      <section class="view" id="reader" hidden>
+        <header class="titlebar">
+          <span class="tb-icon" aria-hidden="true">✉</span>
+          <h1 class="tb-title" id="bookTitle">Book</h1>
+          <span class="tb-count" id="pageCount">1/1</span>
+        </header>
+        <div class="progress" aria-hidden="true"><i id="progressFill"></i></div>
+
+        <div class="page-frame" id="pageFrame">
+          <div class="pages" id="pages" tabindex="0" aria-live="polite"></div>
+          <button class="tap-zone left" id="tapPrev" aria-label="Previous page"></button>
+          <button class="tap-zone right" id="tapNext" aria-label="Next page"></button>
+        </div>
+
+        <nav class="softkeys">
+          <button type="button" id="skPrev">◀ Prev</button>
+          <button type="button" class="sk-main" id="skMenu">Menu</button>
+          <button type="button" id="skNext">Next ▶</button>
+        </nav>
+
+        <!-- menu sheet -->
+        <div class="sheet-backdrop" id="sheetBackdrop" hidden></div>
+        <div class="sheet" id="sheet" hidden role="dialog" aria-label="Reader menu">
+          <div class="sheet-title">Menu</div>
+          <div class="sheet-row">
+            <span>Text size</span>
+            <span class="seg">
+              <button type="button" id="fontDown" aria-label="Smaller text">A−</button>
+              <button type="button" id="fontUp" aria-label="Bigger text">A+</button>
+            </span>
+          </div>
+          <div class="sheet-row">
+            <span>Font</span>
+            <span class="seg" id="fontSeg">
+              <button type="button" data-font="round">Round</button>
+              <button type="button" data-font="serif">Serif</button>
+              <button type="button" data-font="pixel">Pixel</button>
+            </span>
+          </div>
+          <div class="sheet-row">
+            <span>Screen</span>
+            <span class="seg" id="themeSeg">
+              <button type="button" data-theme="pink">Pink</button>
+              <button type="button" data-theme="night">Night</button>
+            </span>
+          </div>
+          <div class="sheet-title small" id="tocLabel">Contents</div>
+          <ol class="toc" id="toc"></ol>
+          <button type="button" class="sheet-back" id="backToInbox">← Back to Inbox</button>
+        </div>
+      </section>
+
+      <!-- about overlay -->
+      <div class="sheet-backdrop" id="aboutBackdrop" hidden></div>
+      <div class="sheet" id="about" hidden role="dialog" aria-label="About">
+        <div class="sheet-title">About</div>
+        <p class="about-text">PDFopener turns PDF and Word (.docx) files into text e-books that fit your phone. It pulls out the words, finds the chapter headings, and lays everything out in pages you can flip.</p>
+        <p class="about-text"><b>Flip pages:</b> tap the left or right side, swipe, or use the arrow keys.</p>
+        <p class="about-text"><b>Good to know:</b> scanned PDFs (photos of pages) have no text inside, so they can't be converted. Images and complex layouts are left out to keep things readable.</p>
+        <button type="button" class="sheet-back" id="closeAbout">OK</button>
+      </div>
+
+      <div class="toast" id="toast" hidden></div>
+    </div>
+
+    <div class="phone-bottom" aria-hidden="true">
+      <span class="key"></span><span class="key big"></span><span class="key"></span>
+    </div>
+  </div>
+
+  <script src="vendor/pdf.min.js"></script>
+  <script src="vendor/mammoth.browser.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

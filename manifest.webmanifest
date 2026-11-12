@@ -1,0 +1,14 @@
+{
+  "name": "PDFopener",
+  "short_name": "PDFopener",
+  "description": "Turn PDF and Word files into cute pocket e-books.",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#fcf9f8",
+  "theme_color": "#d4a5ad",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "favicon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}
