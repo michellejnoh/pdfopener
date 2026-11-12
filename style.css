@@ -20,11 +20,11 @@
 
   --pixel: "Silkscreen", "DotGothic16", ui-monospace, monospace;
   --dot: "DotGothic16", "Silkscreen", ui-monospace, monospace;
-  --round: "Nunito", ui-rounded, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --helv: "Helvetica Neue", Helvetica, Arial, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
   --serif: "Lora", Georgia, "Times New Roman", serif;
 
   --fs: 18px;
-  --book-font: var(--round);
+  --book-font: var(--helv);
 }
 
 [data-theme="night"] {
@@ -42,7 +42,7 @@ html, body { height: 100%; margin: 0; }
 [hidden] { display: none !important; }
 
 body {
-  font-family: var(--round);
+  font-family: var(--helv);
   color: var(--ink);
   display: flex;
   align-items: center;
@@ -226,6 +226,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
   border: 2px solid var(--pink-300);
   border-radius: 14px 14px 14px 4px;
 }
+/* emphasis in the interface: Helvetica Neue bold */
+.bubble em, .about-text b, .error-bubble b { font-style: normal; font-weight: 700; color: var(--lcd-accent); }
 .bubble-meta { font-family: var(--pixel); font-size: 9px; color: var(--muted); margin-bottom: 4px; }
 
 .dropzone {
@@ -293,6 +295,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 .msg-list { list-style: none; margin: 0; padding: 0; border-top: 2px solid var(--lcd-line); }
 .msg-list li { border-bottom: 2px solid var(--lcd-line); }
+.msg-row { display: flex; align-items: center; }
 .msg-item {
   width: 100%;
   display: flex;
@@ -306,7 +309,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .msg-item:hover, .msg-item:focus-visible { background: var(--lcd-soft); outline: none; }
 .msg-env { flex: none; width: 26px; height: 20px; }
 .msg-main { flex: 1; min-width: 0; }
-.msg-title { font-weight: 800; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.msg-title { display: block; font-weight: 700; font-size: 15px; color: var(--lcd-accent); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .msg-sub { font-size: 12px; color: var(--muted); }
 .msg-pct { font-family: var(--pixel); font-size: 11px; color: var(--lcd-accent); }
 .msg-del {
@@ -523,7 +526,6 @@ button { font: inherit; color: inherit; cursor: pointer; }
   gap: 10px;
   padding: 8px 2px;
   border-bottom: 2px solid var(--lcd-line);
-  font-weight: 600;
   font-size: 15px;
 }
 .seg { display: inline-flex; border: 2px solid var(--berry); border-radius: 999px; overflow: hidden; }
@@ -550,7 +552,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 .toc li button:hover { background: var(--lcd-soft); }
 .toc li.sub button { padding-left: 22px; font-size: 14px; color: var(--muted); }
-.toc li.here button { color: var(--lcd-accent); font-weight: 800; }
+.toc li.here button { color: var(--lcd-accent); }
 .toc li.here button::before { content: "▶ "; font-size: .7em; }
 .toc-empty { font-size: 14px; color: var(--muted); padding: 4px 6px; }
 .sheet-back {
@@ -565,7 +567,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
   background: linear-gradient(#d4a5ad, #c4919a);
   text-shadow: 1px 1px 0 var(--berry);
 }
-.about-text { font-size: 15px; line-height: 1.5; margin: 0 0 10px; }
+.about-text { font-size: 15px; line-height: 1.55; margin: 0 0 10px; }
 
 .toast {
   position: absolute;
@@ -586,3 +588,40 @@ button { font: inherit; color: inherit; cursor: pointer; }
   .dz-env, .cover-badge { animation: none; }
   * { transition: none !important; }
 }
+
+/* original text colours */
+.pages .c { color: var(--c); }
+[data-theme="night"] .pages .c { color: color-mix(in srgb, var(--c) 45%, #fff); }
+
+/* pictures */
+.pages figure.pic {
+  margin: 0 0 .9em;
+  text-align: center;
+  break-inside: avoid;
+  -webkit-column-break-inside: avoid;
+}
+.pages figure.pic img {
+  display: inline-block;
+  vertical-align: top;
+  border-radius: 6px;
+  border: 2px solid var(--lcd-line);
+  background: #fff;
+  cursor: zoom-in;
+}
+.viewer {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(42, 32, 35, .92);
+  cursor: zoom-out;
+}
+.viewer img { max-width: 100%; max-height: 100%; border-radius: 6px; background: #fff; touch-action: pinch-zoom; }
+.viewer-hint {
+  position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%);
+  font-family: var(--pixel); font-size: 10px; color: #f2e6e7; opacity: .8;
+}
+

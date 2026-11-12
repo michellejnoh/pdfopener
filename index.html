@@ -48,7 +48,7 @@
 
           <div class="bubble in">
             <div class="bubble-meta">From: PDFopener · now</div>
-            hi! send me a <b>PDF</b> or <b>Word</b> file and i'll turn it into a little e-book you can read on your phone. everything stays on your device ♡
+            hi! send me a <em>PDF</em> or <em>Word</em> file and i'll turn it into a little e-book you can read on your phone. everything stays on your device ♡
           </div>
 
           <label class="dropzone" id="dropzone" for="fileInput">
@@ -116,7 +116,7 @@
           <div class="sheet-row">
             <span>Font</span>
             <span class="seg" id="fontSeg">
-              <button type="button" data-font="round">Round</button>
+              <button type="button" data-font="helv">Helvetica</button>
               <button type="button" data-font="serif">Serif</button>
               <button type="button" data-font="pixel">Pixel</button>
             </span>
@@ -138,11 +138,14 @@
       <div class="sheet-backdrop" id="aboutBackdrop" hidden></div>
       <div class="sheet" id="about" hidden role="dialog" aria-label="About">
         <div class="sheet-title">About</div>
-        <p class="about-text">PDFopener turns PDF and Word (.docx) files into text e-books that fit your phone. It pulls out the words, finds the chapter headings, and lays everything out in pages you can flip.</p>
+        <p class="about-text">PDFopener turns PDF and Word (.docx) files into e-books that fit your phone. It pulls out the words, pictures and text colours, finds the chapter headings, and lays everything out in pages you can flip.</p>
         <p class="about-text"><b>Flip pages:</b> tap the left or right side, swipe, or use the arrow keys.</p>
-        <p class="about-text"><b>Good to know:</b> scanned PDFs (photos of pages) have no text inside, so they can't be converted. Images and complex layouts are left out to keep things readable.</p>
+        <p class="about-text"><b>Pictures:</b> tap a picture to see it bigger.</p>
+        <p class="about-text"><b>Good to know:</b> scanned PDFs (photos of pages) come through as pictures only, since there's no real text inside. Complex layouts like multi-column magazines may read in a slightly different order.</p>
         <button type="button" class="sheet-back" id="closeAbout">OK</button>
       </div>
+
+      <div class="viewer" id="viewer" hidden role="dialog" aria-label="Picture"><img alt=""><span class="viewer-hint">tap to close</span></div>
 
       <div class="toast" id="toast" hidden></div>
     </div>
@@ -154,6 +157,7 @@
 
   <script src="vendor/pdf.min.js"></script>
   <script src="vendor/mammoth.browser.min.js"></script>
+  <script src="vendor/jszip.min.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
