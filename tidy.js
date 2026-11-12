@@ -187,9 +187,108 @@
     if (a.length < 12 || !b) return false;
     if (/[.!?:;]["”’)\]]?$/.test(a)) return false; // previous line ended a sentence
     if (/^([•▪◦●■\-–—*]|\(?\d{1,3}[.)]|\(?[a-z][.)])\s/.test(b)) return false; // next line is a new list item
+    if (/^(e\.g\.|eg\b|ex\.|ex:|i\.e\.)/i.test(b)) return false; // an example line starts something new
     if (/^[\p{Ll}(\[]/u.test(b)) return true; // continues in lowercase
     if (/[,\-–—\/(&+]$/.test(a)) return true; // broke after a comma, dash, slash…
     return NO_END.test(a); // broke after "the", "a", "of", "and"…
+  }
+
+  // ---------- vocab sheets ----------
+  const POS = "(?:n|v|vt|vi|adj|adv|prep|conj|pron|int|interj|phr|phr\\.\\s?v|idm|idiom|abbr|aux|det|num)";
+  const SEPARATORS = [
+    { re: new RegExp("\\s+\\(?(" + POS + ")\\.\\)?\\s+|\\s+\\((" + POS + ")\\)\\s+", "gi"), pos: true }, // abandon (v.) to leave
+    { re: /\s*\u2003\s*/g },                     // columns in a PDF table
+    { re: /\s+[-–—~=]+>?\s+|\s*[=→]\s*/g },     // abandon - to leave / abandon = to leave
+    { re: /\s*[:：]\s+/g },                        // abandon: to leave
+    { re: /\s+(?=[\uAC00-\uD7A3])/g, ko: true },  // abandon 버리다
+  ];
+  function parseEntry(html) {
+    let h = (html || "").trim();
+    let num = "";
+    const nm = /^(\d{1,3})[.)]\s+/.exec(h);
+    if (nm) { num = nm[1]; h = h.slice(nm[0].length); }
+    const all = stripTags(h);
+    if (!all || all.length > 420) return null;
+    for (const sep of SEPARATORS) {
+      const m = depth0Matches(h, sep.re)[0];
+      if (!m) continue;
+      const termH = h.slice(0, m.start).trim(), defH = h.slice(m.end).trim();
+      const term = stripTags(termH), def = stripTags(defH);
+      if (!term || !def || term.length > 40 || term.split(/\s+/).length > 5) continue;
+      if (/[.!?,;]$/.test(term) || /^(the|a|an|this|that|it|he|she|they|we|i|you)\s/i.test(term) && term.split(/\s+/).length > 2) continue;
+      if (sep.ko && !/^[A-Za-zÀ-ÿ]/.test(term)) continue;
+      return { num, termH, defH, pos: sep.pos ? m.m[0].trim() : "", ex: [] };
+    }
+    return null;
+  }
+  const EXAMPLE = /^\s*(e\.g\.|eg\b|ex\b|ex\.|example|syn|ant|synonyms?|antonyms?|→|=|\*|\(|["“'‘])/i;
+
+  function vocabPass(blocks) {
+    const out = [];
+    for (let k = 0; k < blocks.length; k++) {
+      const b = blocks[k];
+      // a bullet / numbered list whose items are mostly "word – meaning"
+      if ((b.t === "ul" || b.t === "ol") && b.items.length >= 3) {
+        const es = b.items.map(parseEntry);
+        const n = es.filter(Boolean).length;
+        if (n >= 3 && n >= b.items.length * 0.6) {
+          let entries = [];
+          const flush = () => { if (entries.length) out.push({ t: "vocab", i: b.i, entries }); entries = []; };
+          es.forEach((e, j) => {
+            const text = stripTags(b.items[j]);
+            const last = entries[entries.length - 1];
+            if (e) entries.push(Object.assign(e, { i: b.i, num: e.num || (b.t === "ol" ? String((b.start || 1) + j) : ""), ex: (b.ex && b.ex[j]) || [] }));
+            else if (last && (EXAMPLE.test(text) || text.toLowerCase().includes(stripTags(last.termH).toLowerCase()))) last.ex.push(b.items[j]);
+            else { flush(); out.push({ t: b.t, i: b.i, items: [b.items[j]] }); }
+          });
+          flush();
+          continue;
+        }
+      }
+      // a table whose first column is short words
+      if (b.t === "table") {
+        const rows = [...b.html.matchAll(/<tr>([\s\S]*?)<\/tr>/g)].map((r) => [...r[1].matchAll(/<t[dh]>([\s\S]*?)<\/t[dh]>/g)].map((c) => c[1].trim()));
+        const good = rows.filter((r) => r.length >= 2 && r.length <= 5 && stripTags(r[0]) && stripTags(r[0]).length <= 40 && stripTags(r[0]).split(/\s+/).length <= 5);
+        if (rows.length >= 3 && good.length >= rows.length * 0.7) {
+          let head = "";
+          const first = rows[0].map(stripTags).join(" ").toLowerCase();
+          if (/(word|term|vocab|meaning|definition|example|단어|뜻|의미|예문)/.test(first) && rows[0].every((c) => stripTags(c).length < 25)) head = rows.shift().map(stripTags).filter(Boolean).join(" · ");
+          const entries = rows.filter((r) => stripTags(r[0])).map((r) => {
+            const cells = r.slice(1).filter((c) => stripTags(c));
+            let pos = "";
+            if (cells.length > 1 && new RegExp("^\\(?" + POS + "\\.?\\)?$", "i").test(stripTags(cells[0]))) pos = stripTags(cells.shift());
+            let num = "", termH = r[0];
+            const nm = /^(\d{1,3})[.)]?$/.exec(stripTags(r[0]));
+            if (nm && cells.length > 1) { num = nm[1]; termH = cells.shift(); }
+            return { i: b.i, num, termH, pos, defH: cells.shift() || "", ex: cells };
+          });
+          out.push({ t: "vocab", i: b.i, head, entries });
+          continue;
+        }
+      }
+      // a run of paragraphs that are "word – meaning" lines (example lines in between stick to their word)
+      if (b.t === "p" && parseEntry(b.html)) {
+        const entries = [];
+        let j = k, extras = 0;
+        while (j < blocks.length && blocks[j].t === "p") {
+          const e = parseEntry(blocks[j].html);
+          const text = stripTags(blocks[j].html);
+          if (e) { entries.push(Object.assign(e, { i: blocks[j].i })); extras = 0; }
+          else if (entries.length && extras < 3 && text.length < 300 && (EXAMPLE.test(text) || text.toLowerCase().includes(stripTags(entries[entries.length - 1].termH).toLowerCase()))) {
+            entries[entries.length - 1].ex.push(blocks[j].html);
+            extras++;
+          } else break;
+          j++;
+        }
+        if (entries.length >= 4) {
+          out.push({ t: "vocab", i: b.i, entries });
+          k = j - 1;
+          continue;
+        }
+      }
+      out.push(b);
+    }
+    return out;
   }
 
   function layout(src) {
@@ -197,9 +296,16 @@
     const blocks = [];
     for (const [i, b0] of src.entries()) {
       const b = Object.assign({}, b0, { i });
-      if (b.items) b.items = b.items.slice();
+      if (b.items) { b.items = b.items.slice(); b.ex = b.items.map(() => []); }
       const last = blocks[blocks.length - 1];
-      if (b.t === "p" && last) {
+      // an "e.g." line right after a "word – meaning" list item belongs to that word
+      if (b.t === "p" && last && last.items && EXAMPLE.test(stripTags(b.html)) && parseEntry(last.items[last.items.length - 1])) {
+        last.ex[last.ex.length - 1].push(b.html);
+        continue;
+      }
+      const lastText = last ? (last.t === "p" ? last.html : last.items ? last.items[last.items.length - 1] : "") : "";
+      const vocabBoundary = lastText && parseEntry(lastText) && (parseEntry(b.html) || EXAMPLE.test(stripTags(b.html)));
+      if (b.t === "p" && last && !vocabBoundary) {
         const nt = stripTags(b.html);
         if (last.t === "p" && canContinue(stripTags(last.html), nt)) { last.html += " " + b.html; continue; }
         if ((last.t === "ul" || last.t === "ol") && last.items.length && canContinue(stripTags(last.items[last.items.length - 1]), nt)) {
@@ -207,9 +313,17 @@
           continue;
         }
       }
-      if ((b.t === "ul" || b.t === "ol") && last && last.t === b.t) { last.items.push(...b.items); continue; }
+      if ((b.t === "ul" || b.t === "ol") && last && last.t === b.t) { last.items.push(...b.items); last.ex.push(...b.ex); continue; }
       blocks.push(b);
     }
+
+    // 1b. vocabulary lists / tables -> word cards
+    const vb = vocabPass(blocks).flatMap((b) => {
+      if (!b.ex || !b.ex.some((x) => x.length)) return [b];
+      return b.items.flatMap((it, j) => [{ t: b.t, i: b.i, items: [it], start: (b.start || 1) + j }, ...b.ex[j].map((h) => ({ t: "p", i: b.i, html: h }))]);
+    });
+    blocks.length = 0;
+    blocks.push(...vb);
 
     // 2. short title-like lines in front of a long paragraph become subheadings
     const shortLine = (x) => x && x.t === "p" && stripTags(x.html).length < 70 && !/[.!?,;]["”’)]?$/.test(stripTags(x.html));
@@ -316,5 +430,5 @@
     return tokens(html || "").map((t) => (isTag(t) ? t : fixText(t, counter, mark))).join("");
   }
 
-  window.PDFTidy = { layout, fixHtml, splitSentences, canContinue };
+  window.PDFTidy = { layout, fixHtml, splitSentences, canContinue, parseEntry };
 })();

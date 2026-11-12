@@ -83,7 +83,7 @@
   })();
 
   // ---------- settings ----------
-  const settings = Object.assign({ fs: 18, font: "helv", theme: "pink", easy: true, fixes: true }, store.get(SET_KEY, {}));
+  const settings = Object.assign({ fs: 18, font: "helv", theme: "pink", easy: true, fixes: true, hideDefs: false }, store.get(SET_KEY, {}));
   if (!["helv", "serif", "pixel"].includes(settings.font)) settings.font = "helv";
   function applySettings() {
     document.documentElement.style.setProperty("--fs", settings.fs + "px");
@@ -92,6 +92,7 @@
     document.querySelectorAll("#fontSeg button").forEach((b) => b.classList.toggle("on", b.dataset.font === settings.font));
     document.querySelectorAll("#themeSeg button").forEach((b) => b.classList.toggle("on", b.dataset.theme === settings.theme));
     document.querySelectorAll("#layoutSeg button").forEach((b) => b.classList.toggle("on", (b.dataset.easy === "1") === settings.easy));
+    document.querySelectorAll("#vocabSeg button").forEach((b) => b.classList.toggle("on", (b.dataset.hide === "1") === !!settings.hideDefs));
     document.querySelectorAll("#fixSeg button").forEach((b) => b.classList.toggle("on", (b.dataset.fix === "1") === settings.fixes));
     store.set(SET_KEY, settings);
   }
@@ -109,7 +110,7 @@
       data: buf,
       cMapUrl: "vendor/cmaps/",
       cMapPacked: true,
-      standardFontDataUrl: "vendor/standard_fonts/",
+      // (no standardFontDataUrl: it makes PDF.js drop text in non-embedded Korean/CJK fonts)
     }).promise;
     let metaTitle = "";
     try {
@@ -328,14 +329,16 @@
         if (end !== null && !f.joined) {
           const gap = f.x - end;
           const last = segs[segs.length - 1];
-          if (gap > f.size * 0.18 && last && !/\s$/.test(last.text) && !/^\s/.test(piece)) piece = " " + piece;
+          // a wide gap = separate columns (e.g. word | meaning): keep it as a wide space so columns stay apart
+          if (gap > f.size * 1.6 && last) piece = "\u2003" + piece.replace(/^\s+/, "");
+          else if (gap > f.size * 0.15 && last && !/\s$/.test(last.text) && !/^\s/.test(piece)) piece = " " + piece;
         }
         const last = segs[segs.length - 1];
         if (last && last.color === f.color) last.text += piece;
         else segs.push({ text: piece, color: f.color });
         end = f.x + f.w;
       }
-      segs.forEach((s) => (s.text = s.text.replace(/\s+/g, " ")));
+      segs.forEach((s) => (s.text = s.text.replace(/[ \t\n\r\f\v\u00a0]+/g, " ").replace(/ ?\u2003+ ?/g, "\u2003")));
       if (segs.length) { segs[0].text = segs[0].text.replace(/^\s+/, ""); segs[segs.length - 1].text = segs[segs.length - 1].text.replace(/\s+$/, ""); }
       line.segs = segs.filter((s) => s.text);
       line.text = line.segs.map((s) => s.text).join("");
@@ -444,7 +447,8 @@
           const indented = l.x0 > left + body * 0.9 && l.x0 - left < fullWidth * 0.3 && !big;
           const prevShort = prev.x1 < left + fullWidth * 0.82 && /[.!?:"”’)]$/.test(prev.text);
           const bullet = BULLET.test(l.text);
-          newPara = sizeChange || bigGap || indented || prevShort || bullet;
+          const example = /^(e\.g\.|eg\b|ex\.|ex:|example\b)/i.test(l.text);
+          newPara = sizeChange || bigGap || indented || prevShort || bullet || example;
         }
         if (newPara) {
           cur = { lines: [l.segs], size: l.size, page: pi };
@@ -496,7 +500,7 @@
         const type = ordered ? "ol" : "ul";
         const prev = blocks[blocks.length - 1];
         if (prev && prev.t === type) prev.items.push(item);
-        else blocks.push({ t: type, items: [item] });
+        else blocks.push(Object.assign({ t: type, items: [item] }, ordered && /^\(?\d+/.test(m[1]) ? { start: parseInt(m[1].replace("(", ""), 10) } : {}));
         continue;
       }
       // a line that only continues the previous paragraph / list item (broken by a line change)
@@ -724,6 +728,7 @@
   let book = null; // { id, title, file, kind, added, blocks, pos, pct }
   let page = 0, pageCount = 1, stride = 1;
   let chapterLevel = 1;
+  let vocabWords = 0;
 
   function renderBook() {
     const el = $("pages");
@@ -751,16 +756,25 @@
         const cls = b.pseudo ? ' class="pseudo"' : b.lvl === 2 && chapterLevel === 2 ? ' class="chapter"' : "";
         body += `<h${b.lvl}${di}${cls}>${fx(b.html)}</h${b.lvl}>`;
       } else if (b.t === "p") body += `<p${di}${b.cls ? ` class="${b.cls}"` : ""}>${fx(b.html)}</p>`;
-      else if (b.t === "ul" || b.t === "ol") body += `<${b.t}${di}>${b.items.map((x) => `<li>${fx(x)}</li>`).join("")}</${b.t}>`;
+      else if (b.t === "ul" || b.t === "ol") body += `<${b.t}${di}${b.t === "ol" && b.start > 1 ? ` start="${b.start}"` : ""}>${b.items.map((x) => `<li>${fx(x)}</li>`).join("")}</${b.t}>`;
       else if (b.t === "quote") body += `<blockquote${di}>${fx(b.html)}</blockquote>`;
       else if (b.t === "callout") body += `<div class="callout"${di}>${fx(b.html)}</div>`;
       else if (b.t === "def") body += `<p class="def"${di}>${fx(b.html)}</p>`;
       else if (b.t === "table") body += `<div class="tbl-wrap"${di}>${fx(b.html)}</div>`;
       else if (b.t === "img") body += `<figure class="pic"${di}><img src="${b.src}" alt="${esc(b.alt || "")}" data-w="${b.w || 600}" data-h="${b.h || 400}" decoding="async"></figure>`;
       else if (b.t === "hr") body += `<hr${di}>`;
+      else if (b.t === "vocab") {
+        body += `<div class="vocab-head"${di}>${b.head ? fx(b.head) + " · " : ""}${b.entries.length} words</div>`;
+        b.entries.forEach((e) => {
+          body += `<div class="vcard" data-i="${e.i}"><div class="vterm">${e.num ? `<span class="vnum">${esc(e.num)}</span>` : ""}<span class="vword">${fx(e.termH)}</span>${e.pos ? `<span class="vpos">${esc(e.pos)}</span>` : ""}</div>` +
+            `<div class="vbody">${e.defH ? e.defH.split(/\s*\u2003\s*/).filter((x) => stripTags(x)).map((x, k) => `<div class="vdef${k ? " more" : ""}">${fx(x)}</div>`).join("") : ""}${e.ex.map((x) => `<div class="vex">${fx(x)}</div>`).join("")}</div></div>`;
+        });
+      }
     });
+    vocabWords = disp.filter((b) => b.t === "vocab").reduce((n, b) => n + b.entries.length, 0);
+    el.classList.toggle("hide-defs", !!settings.hideDefs);
 
-    const tidyNote = [settings.easy ? "easy layout" : "", settings.fixes && counter.n ? `${counter.n} small fix${counter.n > 1 ? "es" : ""}` : ""].filter(Boolean).join(" · ");
+    const tidyNote = [settings.easy ? (vocabWords ? `vocab sheet · ${vocabWords} words` : "easy layout") : "", settings.fixes && counter.n ? `${counter.n} small fix${counter.n > 1 ? "es" : ""}` : ""].filter(Boolean).join(" · ");
     const meta = [words ? `${words.toLocaleString()} words · ~${mins} min read` : "", pics ? `${pics} picture${pics > 1 ? "s" : ""}` : "", tidyNote].filter(Boolean).join("<br>");
     el.innerHTML = `
       <div class="cover">
@@ -1035,6 +1049,16 @@
   $("pages").addEventListener("click", (e) => {
     const img = e.target.closest("figure.pic img");
     if (img) openViewer(img.src, img.alt);
+    const card = e.target.closest(".vcard");
+    if (card && settings.hideDefs) card.classList.toggle("show");
+  });
+  $("vocabSeg").addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-hide]");
+    if (!b) return;
+    settings.hideDefs = b.dataset.hide === "1";
+    applySettings();
+    $("pages").classList.toggle("hide-defs", settings.hideDefs);
+    $("pages").querySelectorAll(".vcard.show").forEach((c) => c.classList.remove("show"));
   });
   $("skMenu").addEventListener("click", openSheet);
   $("sheetBackdrop").addEventListener("click", closeSheet);
@@ -1103,5 +1127,5 @@
   renderLibrary();
 
   // test hook
-  window.__pdfopener = { get state() { return { page, pageCount, book }; } };
+  window.__pdfopener = { linesFromItems, scanOps, blocksFromPdfLines, get state() { return { page, pageCount, book }; } };
 })();
