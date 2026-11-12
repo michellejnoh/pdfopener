@@ -20,7 +20,7 @@
 
   --pixel: "Silkscreen", "DotGothic16", ui-monospace, monospace;
   --dot: "DotGothic16", "Silkscreen", ui-monospace, monospace;
-  --helv: "Helvetica Neue", Helvetica, Arial, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --helv: Arial, "Liberation Sans", Helvetica, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
   --serif: "Lora", Georgia, "Times New Roman", serif;
 
   --fs: 18px;

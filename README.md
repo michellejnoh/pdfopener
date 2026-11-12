@@ -9,7 +9,7 @@ Turn a **PDF** or **Word (.docx)** file into a cute, mobile-friendly e-book, sty
 - Keeps the pictures and the original text colours
 - Removes page numbers and running headers/footers from PDFs
 - Lays the book out in pages you can flip (tap the sides, swipe, or use the arrow keys)
-- Contents menu, text size, three fonts (Helvetica / Serif / Pixel) and a Night screen
+- Contents menu, text size, three fonts (Arial / Serif / Pixel) and a Night screen
 - Remembers your books and where you stopped reading (saved in your browser)
 
 Everything runs in your browser. Files are never uploaded anywhere.
@@ -20,4 +20,4 @@ Everything runs in your browser. Files are never uploaded anywhere.
 - Old `.doc` files need to be re-saved as `.docx` first.
 
 ## Built with
-Plain HTML, CSS and JavaScript · [PDF.js](https://mozilla.github.io/pdf.js/) · [mammoth.js](https://github.com/mwilliamson/mammoth.js) · fonts: Helvetica Neue, Silkscreen, DotGothic16, Lora
+Plain HTML, CSS and JavaScript · [PDF.js](https://mozilla.github.io/pdf.js/) · [mammoth.js](https://github.com/mwilliamson/mammoth.js) · fonts: Arial, Silkscreen, DotGothic16, Lora
