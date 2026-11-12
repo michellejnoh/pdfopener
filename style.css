@@ -40,7 +40,7 @@
 * { box-sizing: border-box; }
 html, body { height: 100%; margin: 0; overflow: hidden; overscroll-behavior: none; }
 html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
-button, label, .msg-item { touch-action: manipulation; }
+*, *::before, *::after { touch-action: manipulation; } /* no double-tap zoom */
 [hidden] { display: none !important; }
 
 body {
@@ -714,10 +714,22 @@ button { font: inherit; color: inherit; cursor: pointer; }
 [data-theme="night"] .pages.hide-defs .vcard:not(.show) .vbody::after { background: repeating-linear-gradient(45deg, var(--lcd-soft) 0 6px, var(--lcd-line) 6px 12px); color: var(--lcd-text); }
 .pages.hide-defs .vcard { cursor: pointer; }
 
-/* file type chooser */
+/* file type chooser (shown in place of the upload box) */
+.type-inline {
+  padding: 14px 12px 6px;
+  border: 3px solid var(--pink-400);
+  border-radius: 16px;
+  background: var(--lcd-soft);
+}
+.type-q { font-family: var(--dot); font-size: 18px; color: var(--lcd-accent); margin-bottom: 2px; }
 .type-file { margin: 0 0 10px; font-size: 14px; color: var(--muted); word-break: break-all; }
 .type-btn {
   width: 100%;
+  min-height: 64px;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+  color: inherit;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -734,7 +746,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .type-desc { font-size: 13px; color: var(--muted); }
 .type-cancel {
   width: 100%;
-  padding: 9px;
+  padding: 12px;
   font-family: var(--pixel);
   font-size: 11px;
   color: var(--muted);

@@ -941,12 +941,13 @@
     if (ext !== "pdf" && ext !== "docx") return showError("I can only open <b>.pdf</b> and <b>.docx</b> files.");
     pendingFile = file;
     $("typeFile").textContent = name;
+    $("dropzone").hidden = true;
     $("typeSheet").hidden = false;
-    $("typeBackdrop").hidden = false;
+    $("typeSheet").scrollIntoView({ block: "nearest" });
   }
   function closeTypeSheet() {
     $("typeSheet").hidden = true;
-    $("typeBackdrop").hidden = true;
+    $("dropzone").hidden = false;
   }
   $("typeSheet").addEventListener("click", (e) => {
     const b = e.target.closest("button[data-type]");
@@ -957,7 +958,6 @@
     processFile(f, b.dataset.type);
   });
   $("typeCancel").addEventListener("click", () => { pendingFile = null; closeTypeSheet(); });
-  $("typeBackdrop").addEventListener("click", () => { pendingFile = null; closeTypeSheet(); });
 
   // step 2: read it
   async function processFile(file, type) {
@@ -1165,6 +1165,22 @@
 
   let rt;
   window.addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(relayoutKeepingPlace, 150); });
+
+  // iPhone Safari ignores "no zoom" in the page settings, so stop the gestures themselves
+  let lastTouchEnd = 0;
+  document.addEventListener("touchend", (e) => {
+    const now = Date.now();
+    if (now - lastTouchEnd < 350 && e.touches.length === 0 && $("viewer").hidden) {
+      e.preventDefault(); // second tap of a double-tap: no zoom
+      const t = e.target.closest && e.target.closest("button, label, .tap-zone, .vcard, .msg-item");
+      if (t) t.click(); // …but still count it as a normal tap
+    }
+    lastTouchEnd = now;
+  }, { passive: false });
+  ["gesturestart", "gesturechange"].forEach((ev) =>
+    document.addEventListener(ev, (e) => { if ($("viewer").hidden) e.preventDefault(); }, { passive: false })
+  );
+  document.addEventListener("dblclick", (e) => e.preventDefault(), { passive: false });
 
   renderLibrary();
 

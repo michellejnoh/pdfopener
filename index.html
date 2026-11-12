@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
   <title>PDFopener ♡ pocket e-books from your files</title>
   <meta name="description" content="Upload a PDF or Word document and read it as a cute, mobile-friendly e-book.">
   <meta http-equiv="Cache-Control" content="no-cache">
@@ -12,8 +12,8 @@
   <link rel="alternate icon" href="favicon.ico">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="stylesheet" href="fonts/fonts.css?v=202611122033">
-  <link rel="stylesheet" href="style.css?v=202611122033">
+  <link rel="stylesheet" href="fonts/fonts.css?v=202611122038">
+  <link rel="stylesheet" href="style.css?v=202611122038">
 </head>
 <body>
   <div class="phone">
@@ -61,6 +61,20 @@
             <span class="dz-sub">tap to choose a file · or drop it here</span>
             <span class="dz-types">.pdf · .docx</span>
           </label>
+
+          <div class="type-inline" id="typeSheet" hidden>
+            <div class="type-q">What kind of file is this?</div>
+            <p class="type-file" id="typeFile"></p>
+            <button type="button" class="type-btn" data-type="reading">
+              <span class="type-name">Reading material</span>
+              <span class="type-desc">notes, articles, textbooks, handouts</span>
+            </button>
+            <button type="button" class="type-btn" data-type="vocab">
+              <span class="type-name">Vocab list</span>
+              <span class="type-desc">words with meanings, word tables, word tests</span>
+            </button>
+            <button type="button" class="type-cancel" id="typeCancel">Cancel</button>
+          </div>
 
           <div class="sending" id="sending" hidden>
             <div class="sending-label" id="sendingLabel">Sending…</div>
@@ -163,22 +177,6 @@
         </div>
       </section>
 
-      <!-- what kind of file? -->
-      <div class="sheet-backdrop" id="typeBackdrop" hidden></div>
-      <div class="sheet" id="typeSheet" hidden role="dialog" aria-label="What kind of file is this?">
-        <div class="sheet-title">What kind of file is this?</div>
-        <p class="type-file" id="typeFile"></p>
-        <button type="button" class="type-btn" data-type="reading">
-          <span class="type-name">Reading material</span>
-          <span class="type-desc">notes, articles, textbooks, handouts</span>
-        </button>
-        <button type="button" class="type-btn" data-type="vocab">
-          <span class="type-name">Vocab list</span>
-          <span class="type-desc">words with meanings, word tables, word tests</span>
-        </button>
-        <button type="button" class="type-cancel" id="typeCancel">Cancel</button>
-      </div>
-
       <!-- about overlay -->
       <div class="sheet-backdrop" id="aboutBackdrop" hidden></div>
       <div class="sheet" id="about" hidden role="dialog" aria-label="About">
@@ -206,7 +204,7 @@
   <script src="vendor/pdf.min.js"></script>
   <script src="vendor/mammoth.browser.min.js"></script>
   <script src="vendor/jszip.min.js"></script>
-  <script src="tidy.js?v=202611122033"></script>
-  <script src="app.js?v=202611122033"></script>
+  <script src="tidy.js?v=202611122038"></script>
+  <script src="app.js?v=202611122038"></script>
 </body>
 </html>
