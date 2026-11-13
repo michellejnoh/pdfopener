@@ -390,15 +390,21 @@
         ctx.fillStyle = "#fff";
         ctx.fillRect(0, 0, outW, height);
         let y = 2;
+        const words = []; // where each word sits in the piece (fractions of width/height), for highlighting
+        const f4 = (v) => Math.round(v * 10000) / 10000;
         for (const l of ls) {
           const shift = para.centered ? Math.max(0, (outW - l.x) / 2) : 0;
-          for (const it of l.items) {
+          l.items.forEach((it, j) => {
             const sw = Math.min(it.sw, hi.width - it.sx), sh = Math.min(it.sh, hi.height - it.sy);
             if (sw > 0 && sh > 0) ctx.drawImage(hi, it.sx, it.sy, sw, sh, it.dx + shift, y + (l.asc - it.asc), sw, sh);
-          }
+            // a word's highlight reaches to the next word, so highlighted words join into one bar
+            const next = l.items[j + 1];
+            const x0 = it.dx + shift, x1 = next ? next.dx + shift : it.dx + shift + it.sw;
+            words.push([f4(x0 / outW), f4((y - lineGap * 0.15) / height), f4((x1 - x0) / outW), f4((l.asc + l.desc + lineGap * 0.3) / height)]);
+          });
           y += l.asc + l.desc + lineGap;
         }
-        pieces.push({ src: encode(c), w: OUT_CSS_W, h: Math.round(height / pxPerCss), cont: i > 0 });
+        pieces.push({ src: encode(c), w: OUT_CSS_W, h: Math.round(height / pxPerCss), cont: i > 0, words });
         c.width = c.height = 0;
       }
     };
@@ -484,7 +490,7 @@
     for (let n = 1; n <= pdf.numPages; n++) {
       const page = await pdf.getPage(n);
       const pageBlocks = [{ t: "pagemark", n }];
-      for (const p of await slicePage(page)) pageBlocks.push(Object.assign({ t: "slice", src: p.src, w: p.w, h: p.h, page: n }, p.cont ? { cont: true } : {}));
+      for (const p of await slicePage(page)) pageBlocks.push(Object.assign({ t: "slice", src: p.src, w: p.w, h: p.h, page: n }, p.cont ? { cont: true } : {}, p.words ? { words: p.words } : {}));
       page.cleanup();
       blocks.push(...pageBlocks);
       if (onProgress) onProgress(n / pdf.numPages, n, pdf.numPages);

@@ -12,8 +12,28 @@
   <link rel="alternate icon" href="favicon.ico">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="stylesheet" href="fonts/fonts.css?v=202611130019">
-  <link rel="stylesheet" href="style.css?v=202611130019">
+  <script>
+    // Always run the newest version: if the site has been updated since this copy was saved, reload it
+    // (only on the inbox, never in the middle of reading or uploading).
+    window.PDFOPENER_BUILD = "202611131053";
+    (function () {
+      function check() {
+        var reader = document.getElementById("reader");
+        if ((reader && !reader.hidden) || (window.__pdfopener && window.__pdfopener.busy)) return;
+        fetch("version.json?t=" + Date.now(), { cache: "no-store" }).then(function (r) { return r.json(); }).then(function (j) {
+          if (!j.v || j.v === window.PDFOPENER_BUILD) return;
+          var key = "pdfopener.reloaded." + j.v;
+          try { if (sessionStorage.getItem(key)) return; sessionStorage.setItem(key, "1"); } catch (e) {}
+          location.replace(location.pathname + "?v=" + j.v);
+        }).catch(function () {});
+      }
+      check();
+      document.addEventListener("visibilitychange", function () { if (!document.hidden) check(); });
+      window.addEventListener("pageshow", function (e) { if (e.persisted) check(); });
+    })();
+  </script>
+  <link rel="stylesheet" href="fonts/fonts.css?v=202611131053">
+  <link rel="stylesheet" href="style.css?v=202611131053">
 </head>
 <body>
   <div class="phone">
@@ -101,9 +121,19 @@
         <header class="titlebar">
           <span class="tb-icon" aria-hidden="true">✉</span>
           <h1 class="tb-title" id="bookTitle">Book</h1>
+          <button type="button" class="hl-btn" id="hlBtn" aria-label="Highlighter">
+            <svg viewBox="0 0 12 12" shape-rendering="crispEdges" aria-hidden="true"><path fill="currentColor" d="M8 0h2v1h1v1h1v2h-1v1h-1v1H9v1H8v1H7v1H5v1H4v1H1v-1H0V8h1V7h1V6h1V5h1V4h1V3h1V2h1V1h1z"/><path fill="#ffe066" d="M2 8h1v1h1v1H2z"/></svg>
+          </button>
           <span class="tb-count" id="pageCount">1/1</span>
         </header>
         <div class="progress" aria-hidden="true"><i id="progressFill"></i></div>
+        <div class="hl-bar" id="hlBar" hidden>
+          <span class="hl-label">Highlighter</span>
+          <button type="button" data-c="0" class="on" aria-label="Yellow"><i class="c0"></i></button>
+          <button type="button" data-c="1" aria-label="Pink"><i class="c1"></i></button>
+          <button type="button" data-c="2" aria-label="Mint"><i class="c2"></i></button>
+          <button type="button" class="hl-done" id="hlDone">Done</button>
+        </div>
 
         <div class="page-frame" id="pageFrame">
           <div class="pages" id="pages" tabindex="0" aria-live="polite"></div>
@@ -171,6 +201,10 @@
               <button type="button" data-theme="night">Night</button>
             </span>
           </div>
+          <div class="sheet-row">
+            <span>Highlights</span>
+            <span class="seg"><button type="button" id="hlClear">Clear all</button></span>
+          </div>
           <div class="sheet-title small" id="tocLabel">Contents</div>
           <ol class="toc" id="toc"></ol>
           <button type="button" class="sheet-back" id="backToInbox">← Back to Inbox</button>
@@ -187,6 +221,7 @@
         <p class="about-text"><b>Easy layout:</b> long paragraphs are split into short chunks, lists hidden inside sentences become real lists, and notes, tips and definitions get their own boxes. No words are added or changed. Switch to <i>Original</i> in the menu anytime.</p>
         <p class="about-text"><b>Vocab sheets:</b> choose <i>Vocab list</i> when you upload (or change <i>File type</i> in the menu) and the words become word cards. Choose <i>Hide</i> next to "Vocab meanings" in the menu to test yourself, then tap a card to reveal it.</p>
         <p class="about-text"><b>Typos:</b> small mistakes (common misspellings, a word typed twice, odd spacing) are fixed and get a faint dotted underline. Hold or hover on one to see what it was.</p>
+        <p class="about-text"><b>Highlighting:</b> tap the marker at the top, pick a colour and drag over words. Start a drag on a highlight to erase it. Tap Done to go back to turning pages.</p>
         <p class="about-text"><b>Pictures:</b> tap a picture to see it bigger.</p>
         <button type="button" class="sheet-back" id="closeAbout">OK</button>
       </div>
@@ -204,8 +239,8 @@
   <script src="vendor/pdf.min.js"></script>
   <script src="vendor/mammoth.browser.min.js"></script>
   <script src="vendor/jszip.min.js"></script>
-  <script src="slicer.js?v=202611130019"></script>
-  <script src="tidy.js?v=202611130019"></script>
-  <script src="app.js?v=202611130019"></script>
+  <script src="slicer.js?v=202611131053"></script>
+  <script src="tidy.js?v=202611131053"></script>
+  <script src="app.js?v=202611131053"></script>
 </body>
 </html>

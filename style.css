@@ -793,3 +793,48 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .toc.grid li.here button::before { content: none; }
 
 .pages .the-end.loading { animation: blink 1.2s steps(2, jump-none) infinite; }
+
+/* highlighter */
+.hl-btn {
+  flex: none;
+  width: 30px; height: 26px;
+  display: grid; place-items: center;
+  color: #fff;
+  background: rgba(255,255,255,.18);
+  border: 2px solid rgba(255,255,255,.55);
+  border-radius: 8px;
+}
+.hl-btn svg { width: 15px; height: 15px; }
+.hl-btn.on { background: #fff; color: var(--berry); border-color: #fff; }
+.hl-bar {
+  flex: none;
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 12px;
+  background: var(--lcd-soft);
+  border-bottom: 2px solid var(--lcd-line);
+}
+.hl-label { flex: 1; font-family: var(--pixel); font-size: 11px; color: var(--lcd-accent); }
+.hl-bar button[data-c] { width: 30px; height: 30px; padding: 3px; border-radius: 50%; border: 2px solid transparent; background: none; }
+.hl-bar button[data-c].on { border-color: var(--berry); }
+.hl-bar button[data-c] i { display: block; width: 100%; height: 100%; border-radius: 50%; }
+.hl-bar .c0, .hlayer .c0 { background: #ffe066; }
+.hl-bar .c1, .hlayer .c1 { background: #ffaec9; }
+.hl-bar .c2, .hlayer .c2 { background: #a8ecc6; }
+.hl-done {
+  font-family: var(--pixel); font-size: 11px; color: #fff;
+  padding: 5px 12px; border-radius: 999px; border: 2px solid var(--berry);
+  background: linear-gradient(#d4a5ad, #c4919a);
+}
+#reader.hl-on .tap-zone { display: none; }
+#reader.hl-on .pages { cursor: text; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+.pages figure.slice .sw { position: relative; display: inline-block; line-height: 0; }
+.pages .hlayer { position: absolute; inset: 0; pointer-events: none; mix-blend-mode: multiply; }
+.pages .hlayer span { position: absolute; border-radius: 2px; opacity: .75; }
+[data-theme="night"] .pages .hlayer { mix-blend-mode: normal; }
+[data-theme="night"] .pages .hlayer span { opacity: .35; }
+.pages mark.hl { color: inherit; border-radius: 2px; padding: 0; }
+.pages mark.hl.c0 { background: rgba(255, 224, 102, .75); }
+.pages mark.hl.c1 { background: rgba(255, 174, 201, .75); }
+.pages mark.hl.c2 { background: rgba(168, 236, 198, .8); }
+[data-theme="night"] .pages mark.hl { color: #2a2023; }
+.msg-type.old { background: #b3a7a3; }

@@ -15,6 +15,8 @@ Turn a **PDF** or **Word (.docx)** file into a cute, mobile-friendly e-book, sty
 **Word files** become a text e-book: choose *Reading material* or *Vocab list* when you upload
 (vocab lists become word cards you can quiz yourself with).
 
+**Highlighting:** tap the marker at the top of the reader, pick yellow, pink or mint and drag over words (in PDFs and Word books). Start a drag on a highlight to erase it.
+
 Everything runs in your browser. Files are never uploaded anywhere. Books and your reading position are saved on your device.
 
 ## Built with

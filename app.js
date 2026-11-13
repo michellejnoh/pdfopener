@@ -762,10 +762,11 @@
     $("toc").innerHTML = book.blocks.map((b, i) => (b.t === "pagemark" ? `<li data-i="${i}"><button type="button" data-i="${i}" aria-label="Page ${b.n}">${b.n}</button></li>` : "")).join("");
     $("tocLabel").textContent = "Pages";
     updateLoadingNote();
+    paintAll();
   }
   const sliceHtml = (b, i) =>
     b.t === "pagemark" ? `<div class="pagemark" data-i="${i}"><span>page ${b.n}</span></div>`
-    : b.t === "slice" ? `<figure class="pic slice${b.cont ? " cont" : ""}" data-i="${i}"><img src="${b.src}" alt="" data-w="${b.w}" data-h="${b.h}" decoding="async"></figure>` : "";
+    : b.t === "slice" ? `<figure class="pic slice${b.cont ? " cont" : ""}" data-i="${i}"><span class="sw"><img src="${b.src}" alt="" data-w="${b.w}" data-h="${b.h}" decoding="async"><span class="hlayer"></span></span></figure>` : "";
   // add newly prepared pages to the open book without losing your place
   function appendSlices(newBlocks, start) {
     const el = $("pages");
@@ -773,6 +774,7 @@
     if (!end) return;
     const cur = firstBlockOnPage();
     end.insertAdjacentHTML("beforebegin", newBlocks.map((b, j) => sliceHtml(b, start + j)).join(""));
+    paintSlices(start, start + newBlocks.length - 1);
     $("toc").insertAdjacentHTML("beforeend", newBlocks.map((b, j) => (b.t === "pagemark" ? `<li data-i="${start + j}"><button type="button" data-i="${start + j}" aria-label="Page ${b.n}">${b.n}</button></li>` : "")).join(""));
     layout(cur);
   }
@@ -784,6 +786,7 @@
   }
 
   function renderBook() {
+    origHtml.clear();
     document.querySelectorAll(".text-only").forEach((r) => (r.hidden = book.mode === "slices"));
     $("toc").classList.toggle("grid", book.mode === "slices");
     if (book.mode === "slices") return renderSlices();
@@ -806,8 +809,9 @@
     const fx = (h) => (settings.fixes && window.PDFTidy ? PDFTidy.fixHtml(h, counter, true) : h);
 
     let body = "";
+    let kc = 0;
     disp.forEach((b) => {
-      const di = ` data-i="${b.i}"`;
+      const di = ` data-i="${b.i}" data-k="${kc++}"`;
       if (b.i === skip && b.t === "h" && !b.pseudo) return;
       if (b.t === "h") {
         const cls = b.pseudo ? ' class="pseudo"' : b.lvl === 2 && chapterLevel === 2 ? ' class="chapter"' : "";
@@ -823,7 +827,7 @@
       else if (b.t === "vocab") {
         body += `<div class="vocab-head"${di}>${b.head ? fx(b.head) + " · " : ""}${b.entries.length} words</div>`;
         b.entries.forEach((e) => {
-          body += `<div class="vcard" data-i="${e.i}"><div class="vterm">${e.num ? `<span class="vnum">${esc(e.num)}</span>` : ""}<span class="vword">${fx(e.termH)}</span>${e.pos ? `<span class="vpos">${esc(e.pos)}</span>` : ""}</div>` +
+          body += `<div class="vcard" data-i="${e.i}" data-k="${kc++}"><div class="vterm">${e.num ? `<span class="vnum">${esc(e.num)}</span>` : ""}<span class="vword">${fx(e.termH)}</span>${e.pos ? `<span class="vpos">${esc(e.pos)}</span>` : ""}</div>` +
             `<div class="vbody">${e.defH ? e.defH.split(/\s*\u2003\s*/).filter((x) => stripTags(x)).map((x, k) => `<div class="vdef${k ? " more" : ""}">${fx(x)}</div>`).join("") : ""}${e.ex.map((x) => `<div class="vex">${fx(x)}</div>`).join("")}</div></div>`;
         });
       }
@@ -841,6 +845,8 @@
         <div class="cover-meta">from: ${esc(book.file)}<br>${meta}</div>
         <div class="cover-hint">tap the right side or swipe to start ▶</div>
       </div>${body}<div class="the-end">— end of message —<br>♡</div>`;
+
+    paintAll();
 
     // table of contents
     const toc = $("toc");
@@ -933,6 +939,7 @@
   }
   function closeBook() {
     closeSheet();
+    setHlMode(false);
     book = null;
     $("reader").hidden = true;
     $("inbox").hidden = false;
@@ -954,7 +961,7 @@
               ${envSvg}
               <span class="msg-main">
                 <span class="msg-title">${esc(b.title)}</span>
-                <span class="msg-sub">${b.mode === "slices" ? `<span class="msg-type">pdf</span>` : b.type ? `<span class="msg-type">${b.type === "vocab" ? "vocab" : "reading"}</span>` : ""}${esc(b.file)} · ${new Date(b.added).toLocaleDateString()}</span>
+                <span class="msg-sub">${b.mode === "slices" ? `<span class="msg-type">pdf</span>` : b.kind === "pdf" ? `<span class="msg-type old">old · re-upload</span>` : b.type ? `<span class="msg-type">${b.type === "vocab" ? "vocab" : "reading"}</span>` : ""}${esc(b.file)} · ${new Date(b.added).toLocaleDateString()}</span>
               </span>
               <span class="msg-pct">${b.pct ? b.pct + "%" : "NEW"}</span>
             </button>
@@ -1126,6 +1133,275 @@
     requestAnimationFrame(() => layout(cur));
   }
 
+  // =====================================================================
+  //  HIGHLIGHTER — drag over words to highlight them; start on a highlight to erase it
+  //  PDFs: word boxes recorded when the page was cut. Word books: character ranges of each block.
+  // =====================================================================
+  let hlMode = false, hlColor = 0, hl = null;
+  const hlKey = () => "pdfopener.hl." + book.id;
+  const textSig = () => (settings.easy ? "e" : "o") + (settings.fixes ? "f" : "k") + (book.type || "");
+  function loadHL() { hl = store.get(hlKey(), { slices: {}, text: {} }); hl.slices = hl.slices || {}; hl.text = hl.text || {}; }
+  function saveHL() { store.set(hlKey(), hl); }
+  function paintAll() {
+    if (!book) return;
+    loadHL();
+    if (book.mode === "slices") paintSlices(0, book.blocks.length - 1);
+    else paintText();
+  }
+
+  // ----- PDF pieces -----
+  function paintSlices(lo, hi2, temp) {
+    const el = $("pages");
+    for (let i = lo; i <= hi2; i++) {
+      const b = book.blocks[i];
+      if (!b || b.t !== "slice" || !b.words) continue;
+      const fig = el.querySelector(`figure.slice[data-i="${i}"] .hlayer`);
+      if (!fig) continue;
+      const marks = Object.assign({}, hl.slices[i] || {});
+      if (temp) temp(i, marks);
+      fig.innerHTML = Object.keys(marks).map((w) => {
+        const r = b.words[w];
+        return r ? `<span class="c${marks[w]}" style="left:${r[0] * 100}%;top:${r[1] * 100}%;width:${r[2] * 100}%;height:${r[3] * 100}%"></span>` : "";
+      }).join("");
+    }
+  }
+  function sliceHit(x, y) {
+    const hit = document.elementFromPoint(x, y);
+    const fig = hit && hit.closest && hit.closest("figure.slice");
+    if (!fig) return null;
+    const i = +fig.dataset.i, b = book.blocks[i];
+    if (!b || !b.words) return null;
+    const r = fig.querySelector("img").getBoundingClientRect();
+    const fx = (x - r.left) / r.width, fy = (y - r.top) / r.height;
+    let best = -1, bestD = Infinity;
+    b.words.forEach((w, j) => {
+      const dy = fy < w[1] ? w[1] - fy : fy > w[1] + w[3] ? fy - w[1] - w[3] : 0;
+      const dx = fx < w[0] ? w[0] - fx : fx > w[0] + w[2] ? fx - w[0] - w[2] : 0;
+      const d = dy * 4 + dx;
+      if (d < bestD) { bestD = d; best = j; }
+    });
+    return best >= 0 ? { i, w: best } : null;
+  }
+  const before = (a, b) => a.i < b.i || (a.i === b.i && a.w <= b.w);
+  function eachWord(a, b, fn) {
+    const [s0, e0] = before(a, b) ? [a, b] : [b, a];
+    for (let i = s0.i; i <= e0.i; i++) {
+      const blk = book.blocks[i];
+      if (!blk || blk.t !== "slice" || !blk.words) continue;
+      const from = i === s0.i ? s0.w : 0, to = i === e0.i ? e0.w : blk.words.length - 1;
+      for (let w = from; w <= to; w++) fn(i, w);
+    }
+  }
+
+  // ----- Word books -----
+  const origHtml = new Map();
+  function rangesFor(k) { const t = hl.text[textSig()] || {}; return (t[k] || []).slice(); }
+  function setRanges(k, list) {
+    const sig = textSig();
+    hl.text[sig] = hl.text[sig] || {};
+    if (list.length) hl.text[sig][k] = list; else delete hl.text[sig][k];
+  }
+  function applyMarks(el, ranges) {
+    if (!ranges.length) return;
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    const nodes = [];
+    let n;
+    while ((n = walker.nextNode())) nodes.push(n);
+    let pos = 0;
+    for (const t of nodes) {
+      const len = t.nodeValue.length, start = pos, end = pos + len;
+      pos = end;
+      const hits = ranges.filter((r) => r.s < end && r.e > start);
+      if (!hits.length) continue;
+      const pts = [...new Set([start, end, ...hits.flatMap((r) => [Math.max(start, r.s), Math.min(end, r.e)])])].sort((a, b) => a - b);
+      const frag = document.createDocumentFragment();
+      for (let q = 0; q < pts.length - 1; q++) {
+        const a = pts[q], b2 = pts[q + 1];
+        const txt = t.nodeValue.slice(a - start, b2 - start);
+        const r = hits.find((r) => r.s <= a && r.e >= b2);
+        if (r) {
+          const m = document.createElement("mark");
+          m.className = "hl c" + r.c + (r.erase ? " erasing" : "");
+          m.textContent = txt;
+          frag.appendChild(m);
+        } else frag.appendChild(document.createTextNode(txt));
+      }
+      t.parentNode.replaceChild(frag, t);
+    }
+  }
+  function paintText(only) {
+    const els = only || $("pages").querySelectorAll("[data-k]");
+    for (const el of els) {
+      const k = el.dataset.k;
+      if (!origHtml.has(k) || !only) origHtml.set(k, el.innerHTML);
+      else el.innerHTML = origHtml.get(k);
+      applyMarks(el, rangesFor(k));
+    }
+  }
+  function addRange(list, s, e, c) {
+    const out = [];
+    for (const r of list) {
+      if (r.e <= s || r.s >= e) out.push(r);
+      else { if (r.s < s) out.push({ s: r.s, e: s, c: r.c }); if (r.e > e) out.push({ s: e, e: r.e, c: r.c }); }
+    }
+    if (c !== null) out.push({ s, e, c });
+    return out.sort((a, b) => a.s - b.s);
+  }
+  function rawCaret(x, y) {
+    if (document.caretRangeFromPoint) { const r = document.caretRangeFromPoint(x, y); return r ? { node: r.startContainer, off: r.startOffset } : null; }
+    if (document.caretPositionFromPoint) { const p = document.caretPositionFromPoint(x, y); return p ? { node: p.offsetNode, off: p.offset } : null; }
+    return null;
+  }
+  // the text position under a finger; in a margin or gap, snap to the nearest line of text
+  function caretAt(x, y) {
+    const c = rawCaret(x, y);
+    if (c && blockOf(c.node) && c.node.nodeType === 3) return c;
+    const frame = $("pageFrame").getBoundingClientRect();
+    let best = null, bestD = Infinity;
+    for (const el of $("pages").querySelectorAll("[data-k]")) {
+      for (const r of el.getClientRects()) {
+        if (r.right < frame.left || r.left > frame.right) continue; // only blocks on this page
+        const dy = y < r.top ? r.top - y : y > r.bottom ? y - r.bottom : 0;
+        if (dy < bestD) { bestD = dy; best = r; }
+      }
+    }
+    if (!best || bestD > 40) return c && blockOf(c.node) ? c : null;
+    const yy = Math.min(Math.max(y, best.top + 2), best.bottom - 2);
+    const xx = Math.min(Math.max(x, best.left + 1), best.right - 1);
+    const c2 = rawCaret(xx, yy);
+    return c2 && blockOf(c2.node) ? c2 : c && blockOf(c.node) ? c : null;
+  }
+  const blockOf = (node) => { const e = node && (node.nodeType === 1 ? node : node.parentElement); return e && e.closest ? e.closest("#pages [data-k]") : null; };
+  function offsetIn(el, node, off) {
+    const r = document.createRange();
+    r.setStart(el, 0);
+    try { r.setEnd(node, off); } catch { return 0; }
+    return r.toString().length;
+  }
+  // a drag position as "block number + character position", which stays valid when the block is redrawn
+  function logical(c) {
+    const el = c && blockOf(c.node);
+    return el ? { k: el.dataset.k, off: offsetIn(el, c.node, c.off) } : null;
+  }
+  // the character range a drag covers, block by block, snapped to whole words
+  function textSpans(a, b) {
+    const all = [...$("pages").querySelectorAll("[data-k]")];
+    const ea = all.find((x) => x.dataset.k === a.k), eb = all.find((x) => x.dataset.k === b.k);
+    if (!ea || !eb) return [];
+    let ia = all.indexOf(ea), ib = all.indexOf(eb), sa = a.off, sb = b.off;
+    if (ia > ib || (ia === ib && sa > sb)) [ia, ib, sa, sb] = [ib, ia, sb, sa];
+    const spans = [];
+    for (let q = ia; q <= ib; q++) {
+      const el = all[q];
+      const text = el.textContent;
+      let s0 = q === ia ? sa : 0, e0 = q === ib ? sb : text.length;
+      while (s0 > 0 && !/\s/.test(text[s0 - 1])) s0--;
+      while (e0 < text.length && !/\s/.test(text[e0])) e0++;
+      if (e0 === s0 && e0 < text.length) e0++;
+      if (e0 > s0) spans.push({ el, k: el.dataset.k, s: s0, e: e0 });
+    }
+    return spans;
+  }
+
+  // ----- dragging -----
+  let drag = null;
+  function hlDown(e) {
+    if (!hlMode || !book) return;
+    e.preventDefault();
+    if (book.mode === "slices") {
+      const h = sliceHit(e.clientX, e.clientY);
+      if (!h) { if (!book.blocks.some((b) => b.words)) toast("upload this PDF again to highlight it"); return; }
+      drag = { start: h, cur: h, erase: (hl.slices[h.i] || {})[h.w] !== undefined, lo: h.i, hi: h.i };
+      previewSlices();
+    } else {
+      const c = caretAt(e.clientX, e.clientY);
+      const pos = logical(c);
+      if (!pos) return;
+      const markEl = (c.node.nodeType === 1 ? c.node : c.node.parentElement).closest("mark.hl");
+      drag = { start: pos, cur: pos, erase: !!markEl, prev: [] };
+      previewText();
+    }
+    try { $("pages").setPointerCapture(e.pointerId); } catch {}
+  }
+  function hlMove(e) {
+    if (!drag) return;
+    e.preventDefault();
+    if (book.mode === "slices") {
+      const h = sliceHit(e.clientX, e.clientY);
+      if (h) { drag.cur = h; previewSlices(); }
+    } else {
+      const pos = logical(caretAt(e.clientX, e.clientY));
+      if (pos) { drag.cur = pos; previewText(); }
+    }
+  }
+  function previewSlices() {
+    const lo = Math.min(drag.lo, drag.start.i, drag.cur.i), hi2 = Math.max(drag.hi, drag.start.i, drag.cur.i);
+    drag.lo = lo; drag.hi = hi2;
+    const sel = {};
+    eachWord(drag.start, drag.cur, (i, w) => { (sel[i] = sel[i] || {})[w] = 1; });
+    paintSlices(lo, hi2, (i, marks) => {
+      for (const w of Object.keys(sel[i] || {})) { if (drag.erase) delete marks[w]; else marks[w] = hlColor; }
+    });
+  }
+  function previewText() {
+    const spans = textSpans(drag.start, drag.cur);
+    const els = new Set([...drag.prev, ...spans.map((x) => x.el)]);
+    for (const el of els) {
+      el.innerHTML = origHtml.get(el.dataset.k);
+      let list = rangesFor(el.dataset.k);
+      const sp = spans.find((x) => x.el === el);
+      if (sp) list = drag.erase ? addRange(list, sp.s, sp.e, null) : addRange(list, sp.s, sp.e, hlColor);
+      applyMarks(el, list);
+    }
+    drag.prev = spans.map((x) => x.el);
+  }
+  function hlUp() {
+    if (!drag) return;
+    if (book.mode === "slices") {
+      eachWord(drag.start, drag.cur, (i, w) => {
+        const m = (hl.slices[i] = hl.slices[i] || {});
+        if (drag.erase) delete m[w]; else m[w] = hlColor;
+        if (!Object.keys(m).length) delete hl.slices[i];
+      });
+    } else {
+      for (const sp of textSpans(drag.start, drag.cur)) {
+        const list = rangesFor(sp.k);
+        setRanges(sp.k, drag.erase ? addRange(list, sp.s, sp.e, null) : addRange(list, sp.s, sp.e, hlColor));
+      }
+    }
+    drag = null;
+    saveHL();
+  }
+  $("pages").addEventListener("pointerdown", hlDown);
+  $("pages").addEventListener("pointermove", hlMove);
+  $("pages").addEventListener("pointerup", hlUp);
+  $("pages").addEventListener("pointercancel", hlUp);
+
+  function setHlMode(on) {
+    hlMode = on;
+    $("reader").classList.toggle("hl-on", on);
+    $("hlBar").hidden = !on;
+    $("hlBtn").classList.toggle("on", on);
+    if (on && book && book.mode === "slices" && !book.blocks.some((b) => b.words)) toast("upload this PDF again to highlight it");
+  }
+  $("hlBtn").addEventListener("click", () => setHlMode(!hlMode));
+  $("hlDone").addEventListener("click", () => setHlMode(false));
+  $("hlBar").addEventListener("click", (e) => {
+    const sw = e.target.closest("button[data-c]");
+    if (!sw) return;
+    hlColor = +sw.dataset.c;
+    document.querySelectorAll("#hlBar button[data-c]").forEach((b) => b.classList.toggle("on", b === sw));
+  });
+  $("hlClear").addEventListener("click", () => {
+    if (!book) return;
+    hl = { slices: {}, text: {} };
+    saveHL();
+    closeSheet();
+    renderBook();
+    requestAnimationFrame(() => layout(firstBlockOnPage()));
+    toast("highlights cleared");
+  });
+
   // ---------- picture viewer ----------
   function openViewer(src, alt) {
     const v = $("viewer");
@@ -1176,6 +1452,7 @@
       return toast("couldn't find that book anymore");
     }
     openBook({ ...meta, blocks: data.blocks });
+    if (meta.kind === "pdf" && meta.mode !== "slices") toast("saved with an older version — upload this PDF again for the new viewer");
   });
 
   $("skPrev").addEventListener("click", () => goTo(page - 1));
@@ -1183,6 +1460,7 @@
   $("tapPrev").addEventListener("click", () => goTo(page - 1));
   $("tapNext").addEventListener("click", () => goTo(page + 1));
   $("pages").addEventListener("click", (e) => {
+    if (hlMode) return;
     const img = e.target.closest("figure.pic img");
     if (img) openViewer(img.src, img.alt);
     const card = e.target.closest(".vcard");
@@ -1257,7 +1535,7 @@
   const frame = $("pageFrame");
   frame.addEventListener("touchstart", (e) => { sx = e.touches[0].clientX; sy = e.touches[0].clientY; }, { passive: true });
   frame.addEventListener("touchend", (e) => {
-    if (sx === null) return;
+    if (sx === null || hlMode) { sx = null; return; }
     const dx = e.changedTouches[0].clientX - sx, dy = e.changedTouches[0].clientY - sy;
     sx = null;
     if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy) * 1.3) {
